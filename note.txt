@@ -1,0 +1,54 @@
+python: No module named torch.distributed.run
+将torch.distributed.run 换成 torch.distributed.launch 即可
+
+yolo task=detect mode=train model=ultralytics/models/v8/yolov8s.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov8s_8gpu batch=128 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4,5,6,7,8\'
+
+yolo task=detect mode=train model=ultralytics/models/v8/yolov8s.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov8s_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\'
+
+yolo task=detect mode=train model=ultralytics/models/v5/yolov5s_5x5.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov5s_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\'
+
+yolo task=detect mode=train model=ultralytics/models/v5/yolov5s_relu.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov5s_relu_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\'
+
+yolo task=detect mode=train model=ultralytics/models/v5/yolov5s_relu.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov5s_relu_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False resume=True optimizer=SGD device=\'1,2,3,4\'
+
+
+yolo task=detect mode=train model=ultralytics/models/v8/yolov8m.yaml data=ultralytics/datasets/sida.yaml cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False resume=False optimizer=SGD device=\'1,2,3,4\'
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 optimizer=SGD device=\'1,2,3,4\'
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 optimizer=SGD
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8m.yaml data=ultralytics/datasets/sida.yaml
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s.yaml data=ultralytics/datasets/sida.yaml
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8s_sida_8gpu
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8m.yaml
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8m_pre.yaml
+
+yolo task=detect mode=val name=sida_yolov8m_8gpu_val model=runs/detect/sida_yolov8m_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov8m_pre_8gpu_val model=runs/detect/sida_yolov8m_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s.yaml
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s_pre.yaml
+
+yolo task=detect mode=val name=sida_yolov8s_8gpu_val model=runs/detect/sida_yolov8s_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov8s_pre_8gpu_val model=runs/detect/sida_yolov8s_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu.yaml
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu_pre.yaml
+
+yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s_relu.yaml
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s_relu_pre.yaml
+
+yolo task=detect mode=val name=sida_yolov8s_relu_8gpu_val model=runs/detect/sida_yolov8s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_val model=runs/detect/sida_yolov8s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+
+sync && echo 3 > /proc/sys/vm/drop_caches
+
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml

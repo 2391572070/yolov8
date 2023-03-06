@@ -1,0 +1,50 @@
+# Ultralytics YOLO 🚀, GPL-3.0 license
+# Default training settings and hyperparameters for medium-augmentation COCO training
+
+task: detect  # inference task, i.e. detect, segment, classify
+mode: train  # YOLO mode, i.e. train, val, predict, export
+
+# Train settings -------------------------------------------------------------------------------------------------------
+# model:  "yolov8m.pt" # path to model file, i.e. yolov8n.pt, yolov8n.yaml
+model:  "yolov8s.pt" # path to model file, i.e. yolov8n.pt, yolov8n.yaml
+# model:  "ultralytics/models/v8/yolov8m.yaml" # path to model file, i.e. yolov8n.pt, yolov8n.yaml
+data:  "ultralytics/datasets/sida.yaml" # path to data file, i.e. i.e. coco128.yaml
+# pretrained: False  # whether to use a pretrained model
+pretrained: True  # whether to use a pretrained model
+imgsz: 640  # size of input images as integer or w,h
+epochs: 50  # number of epochs to train for
+patience: 20  # epochs to wait for no observable improvement for early stopping of training
+batch: 128  # number of images per batch (-1 for AutoBatch)
+# device: 1,2,3,4 # device to run on, i.e. cuda device=0 or device=0,1,2,3 or device=cpu
+device: 1,2,3,4,5,6,7,8 # device to run on, i.e. cuda device=0 or device=0,1,2,3 or device=cpu
+workers: 32  # number of worker threads for data loading (per RANK if DDP)
+cache: False  # True/ram, disk or False. Use cache for data loading
+min_memory: False  # minimize memory footprint loss function, choices=[False, True, <roll_out_thr>]
+
+# Hyperparameters ------------------------------------------------------------------------------------------------------
+lr0: 0.01  # initial learning rate (i.e. SGD=1E-2, Adam=1E-3)
+lrf: 0.01  # final learning rate (lr0 * lrf)
+momentum: 0.937  # SGD momentum/Adam beta1
+weight_decay: 0.0005  # optimizer weight decay 5e-4
+warmup_epochs: 3.0  # warmup epochs (fractions ok)
+warmup_momentum: 0.8  # warmup initial momentum
+warmup_bias_lr: 0.1  # warmup initial bias lr
+box: 7.5  # box loss gain
+cls: 0.5  # cls loss gain (scale with pixels)
+dfl: 1.5  # dfl loss gain
+fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
+label_smoothing: 0.0  # label smoothing (fraction)
+nbs: 64  # nominal batch size
+hsv_h: 0.015  # image HSV-Hue augmentation (fraction)
+hsv_s: 0.7  # image HSV-Saturation augmentation (fraction)
+hsv_v: 0.4  # image HSV-Value augmentation (fraction)
+degrees: 0.0  # image rotation (+/- deg)
+translate: 0.1  # image translation (+/- fraction)
+scale: 0.5  # image scale (+/- gain)
+shear: 0.0  # image shear (+/- deg)
+perspective: 0.0  # image perspective (+/- fraction), range 0-0.001
+flipud: 0.0  # image flip up-down (probability)
+fliplr: 0.5  # image flip left-right (probability)
+mosaic: 1.0  # image mosaic (probability)
+mixup: 0.0  # image mixup (probability)
+copy_paste: 0.0  # segment copy-paste (probability)
