@@ -52,3 +52,6 @@ yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_val model=runs/detect/
 sync && echo 3 > /proc/sys/vm/drop_caches
 
 yolo task=detect mode=train cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml
+
+
+yolo task=detect mode=predict show=True name=sida_yolov8s_pre_8gpu_video model=runs/detect/sida_yolov8s_pre_8gpu/weights/last.pt source=/media/kasim/DataSet/ElevatorRecord/alarm/alarm_video/MOTO_ENTER_ALARM/290b1000010a05000008393443595350/video1/20221115/20221115_145153_10a0500000839344.mp4

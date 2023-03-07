@@ -78,8 +78,8 @@ class BasePredictor:
         if self.args.conf is None:
             self.args.conf = 0.25  # default conf=0.25
         self.done_warmup = False
-        if self.args.show:
-            self.args.show = check_imshow(warn=True)
+        # if self.args.show:
+        #     self.args.show = check_imshow(warn=True)
 
         # Usable if setup is done
         self.model = None
