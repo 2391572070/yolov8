@@ -34,18 +34,21 @@ def parse_args():
     parser.add_argument('--proccess_count', type=int, default=16, help='proccess count')
     parser.add_argument('--gpu_count', type=int, default=2, help='gpu count')
     parser.add_argument('--gpu_id_offset', type=int, default=0, help='gpu id offset')
-    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640,384], help='inference size h,w')
+    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640, 640], help='inference size h,w')
+    parser.add_argument("--stride", type=int, default=32, help="image stride")
+    parser.add_argument("--auto", action='store_true', help="auto")
     parser.add_argument('--conf_thres', type=float, default=0.25, help='confidence threshold')
-    parser.add_argument('--iou_thres', type=float, default=0.45, help='NMS IoU threshold')
-    parser.add_argument('--max_det', type=int, default=1000, help='maximum detections per image')
+    parser.add_argument('--iou_thres', type=float, default=0.5, help='NMS IoU threshold')
+    parser.add_argument('--max_det', type=int, default=300, help='maximum detections per image')
     parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
     parser.add_argument('--agnostic_nms', action='store_true', help='class-agnostic NMS')
     parser.add_argument('--multi_label', action='store_true', help='multi label')
-    parser.add_argument('--min_area', type=int, default=64, help='Bbox min area')
+    parser.add_argument('--min_area', type=int, default=0, help='Bbox min area')
     parser.add_argument('--min_frame_count', type=int, default=0, help='statistic min frame count')
     parser.add_argument('--fps', type=int, default=None, help='fps')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--name', type=str, default='', help='out name')
+    parser.add_argument("--save_txt", action='store_true', help="save txt")
     parser.add_argument("--display", action='store_true', help="display detect results")
     parser.add_argument("--pause", action='store_true', help="pause display detect results")
     parser.add_argument('--seq_width', type=int, default=28, help='seq width')
@@ -91,32 +94,27 @@ def get_video_rotate(video_path):
     return rotate
 
 
-def process_detect_func(results, frameids, w_hs, score_thr, min_area):
+def process_detect_func(results, frameids, score_thr, min_area):
     bbox_count = 0
     frameid_list = []
     label_list = []
     bboxes_list = []
-    for result, frameid, w_h in zip(results, frameids, w_hs):
+    for result, frameid in zip(results, frameids):
         bboxes = result.cpu().numpy()
 
         if bboxes.size > 0:
             mask = bboxes[..., 4] >= score_thr
             bboxes = bboxes[mask]
             if bboxes.size > 0:
-                [width, height], [width_scale, height_scale] = w_h
                 scores = bboxes[..., 4]
-                bboxes[..., [0, 2]] *= width_scale
-                bboxes[..., [1, 3]] *= height_scale
-                np.round(bboxes[..., :4], out=bboxes[..., :4])
                 bboxes = bboxes.astype(dtype=np.int32)
-                np.clip(bboxes[..., [0, 2]], 0, width, out=bboxes[..., [0, 2]])
-                np.clip(bboxes[..., [1, 3]], 0, height, out=bboxes[..., [1, 3]])
-                area = np.prod(bboxes[..., 2:4] - bboxes[..., :2], 1)
-                vaild_mask = area > min_area
-                scores = scores[vaild_mask]
-                bboxes = bboxes[vaild_mask]
-                if bboxes.size < 1:
-                    continue
+                if min_area > 0:
+                    area = np.prod(bboxes[..., 2:4] - bboxes[..., :2], 1)
+                    vaild_mask = area > min_area
+                    scores = scores[vaild_mask]
+                    bboxes = bboxes[vaild_mask]
+                    if bboxes.size < 1:
+                        continue
 
                 labels = bboxes[..., 5:6].tolist()
                 bboxes = bboxes[..., :5].tolist()
@@ -175,13 +173,20 @@ def video_detect_run(file_queue, out_queue, pid, args):
             img /= 255  # 0 - 255 to 0.0 - 1.0
             return img
 
-        def __call__(self, images):
+        def __call__(self, images, orig_w_hs):
             preds = self.model(self.preprocess(images))
             # if isinstance(preds, (list, tuple)):
             #     preds = preds[0]
             preds = ops.non_max_suppression(preds, self.conf_thres, self.iou_thres, agnostic=self.agnostic_nms,
                                             multi_label=self.multi_label, max_det=self.max_det, classes=self.classes)
-            return preds
+
+            shape = images.shape[2:]
+            results = []
+            for pred, orig_w_h in zip(preds, orig_w_hs):
+                orig_shape = [orig_w_h[1], orig_w_h[0]]
+                pred[:, :4] = ops.scale_boxes(shape, pred[:, :4], orig_shape).round()
+                results.append(pred)
+            return results
 
     def init_model_func(args):
         detecter = Detection(args, checkpoint=args.checkpoint, device=device)
@@ -203,8 +208,8 @@ def video_detect_run(file_queue, out_queue, pid, args):
                 if images is not None:
                     # images.requires_grad = False
                     # images = images.cuda(non_blocking=True)
-                    results = model(images)
-                    results = process_detect_func(results, frameids, w_hs, args.conf_thres, args.min_area)
+                    results = model(images, w_hs)
+                    results = process_detect_func(results, frameids, args.conf_thres, args.min_area)
                 else:
                     results = None
 
@@ -221,6 +226,8 @@ def video_detect_run(file_queue, out_queue, pid, args):
 def video_image_run(file_queue, out_queue, pid, args):
     try:
 
+        from ultralytics.yolo.data.augment import LetterBox
+
         class DetectTransform:
 
             def __init__(self, config):
@@ -235,25 +242,10 @@ def video_image_run(file_queue, out_queue, pid, args):
                     self.imgsz = [imgsz, imgsz]
                 self.img_transform = None
 
+                self.letter_box = LetterBox(self.imgsz, config.auto, stride=config.stride)
+
             def __call__(self, image):
-                h, w = image.shape[:2]
-                img_height, img_width = self.imgsz
-                wscale = img_width / w
-                hscale = img_height / h
-                scale = min(wscale, hscale)
-                width = int(round(w * scale))
-                height = int(round(h * scale))
-                if (width != w) or (height != h):
-                    image = cv2.resize(image, (width, height))
-
-                pad_height = (height + 31) & ~31
-                pad_width = (width + 31) & ~31
-
-                if (width != pad_width) or (height != pad_height):
-                    pad_image = np.zeros((pad_height, pad_width, image.shape[2]), dtype=image.dtype)
-                    pad_image[:height, :width] = image
-                else:
-                    pad_image = image
+                pad_image = self.letter_box(image=image)
                 # cv2.imshow('image', image)
                 # cv2.imshow('pad_image', pad_image)
                 # cv2.waitKey()
@@ -263,7 +255,7 @@ def video_image_run(file_queue, out_queue, pid, args):
                 image = np.ascontiguousarray(image)
                 image = torch.from_numpy(image)
 
-                return image, [w/width, h/height]
+                return image
 
         def put_images(out_queue, file_name, index, images, frameids, w_hs):
             while out_queue.qsize() > 64:
@@ -337,10 +329,10 @@ def video_image_run(file_queue, out_queue, pid, args):
                     image_bgr = cv2.flip(cv2.transpose(image_bgr), 0)
 
                 # image_pil = Image.fromarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
-                image, w_h_scale = detect_trans(image_bgr)
+                image = detect_trans(image_bgr)
                 batch_images.append(image)
                 batch_frameids.append(frame_count)
-                batch_w_hs.append([[image_bgr.shape[1], image_bgr.shape[0]], w_h_scale])
+                batch_w_hs.append([image_bgr.shape[1], image_bgr.shape[0]])
                 batch_image_count = len(batch_images)
                 is_end = frame_count >= total_frame_count
                 if (batch_image_count >= batch_size) or is_end:
@@ -356,6 +348,7 @@ def video_image_run(file_queue, out_queue, pid, args):
 
 
 def out_run(out_queue, args, out_file_path, total_file_count):
+    save_txt = args.save_txt
     out_dir = os.path.dirname(out_file_path)
     out_file = open(out_file_path, 'a+', encoding='utf-8')
     file_count = 0
@@ -404,13 +397,18 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                     segs = results_dict.pop('seg', None)
                     results_info = file_results.get(file_name, None)
                     if results_info is None:
-                        out_bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.dat')
-                        dirname = os.path.dirname(out_bbox_file_path)
+                        out_base_name = os.path.join(out_dir, os.path.splitext(file_name)[0])
+                        dirname = os.path.dirname(out_base_name)
                         if not os.path.exists(dirname):
                             os.makedirs(dirname)
-                        out_bbox_file = open(out_bbox_file_path, 'wb')
+                        if save_txt:
+                            out_bbox_file_path = out_base_name + '.box.txt'
+                            out_bbox_file = open(out_bbox_file_path, 'w')
+                        else:
+                            out_bbox_file_path = out_base_name + '.box.dat'
+                            out_bbox_file = open(out_bbox_file_path, 'wb')
                         if segs is not None:
-                            out_seq_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.seq.dat')
+                            out_seq_file_path = out_base_name + '.seq.dat'
                             out_seq_file = open(out_seq_file_path, 'wb')
                         else:
                             out_seq_file = None
@@ -440,7 +438,10 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                             results_info = []
                             for name, _results in results_dict.items():
                                 results_info.extend(_results[i])
-                            dat = struct.pack('6i1f', *results_info)
+                            if save_txt:
+                                dat = '{},{},{},{},{},{},{:.04f}\n'.format(*results_info)
+                            else:
+                                dat = struct.pack('6i1f', *results_info)
                             # print(len(dat), dat_list)
                             out_bbox_file.write(dat)
                     if (out_seq_file is not None) and (segs is not None):
@@ -604,6 +605,7 @@ def video_detect_display(args):
 
     score_thr = args.conf_thres
     pause = args.pause
+    save_txt = args.save_txt
 
     color_list = []
     color_map = {}
@@ -618,10 +620,16 @@ def video_detect_display(args):
         if not os.path.exists(video_path):
             continue
 
-        bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.dat')
-        if not os.path.exists(bbox_file_path):
-            continue
-        bbox_file = open(bbox_file_path, 'rb')
+        if save_txt:
+            bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.txt')
+            if not os.path.exists(bbox_file_path):
+                continue
+            bbox_file = open(bbox_file_path, 'r')
+        else:
+            bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.dat')
+            if not os.path.exists(bbox_file_path):
+                continue
+            bbox_file = open(bbox_file_path, 'rb')
         seq_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.seq.dat')
         if os.path.exists(seq_file_path):
             seq_file = open(seq_file_path, 'rb')
@@ -630,10 +638,17 @@ def video_detect_display(args):
 
         display_infos = {}
         for _ in range(bbox_count):
-            bbox_info = bbox_file.read(28)
-            if len(bbox_info) < 28:
-                break
-            bbox_info = struct.unpack('6i1f', bbox_info)
+            if save_txt:
+                bbox_info = bbox_file.readline().strip()
+                if len(bbox_info) < 12:
+                    break
+                bbox_info = bbox_info.split(',')
+                bbox_info = [int(bbox_info[0]), int(bbox_info[1]), int(bbox_info[2]), int(bbox_info[3]), int(bbox_info[4]), int(bbox_info[5]), float(bbox_info[6])]
+            else:
+                bbox_info = bbox_file.read(28)
+                if len(bbox_info) < 28:
+                    break
+                bbox_info = struct.unpack('6i1f', bbox_info)
             frame_id = bbox_info[0]
             label = bbox_info[1]
             score = bbox_info[6]
@@ -663,8 +678,8 @@ def video_detect_display(args):
             if not grabbed:
                 break
 
-            display_info = display_infos.get(frame_count, None)
             frame_count += 1
+            display_info = display_infos.get(frame_count, None)
             if display_info is None:
                 continue
 
@@ -752,6 +767,7 @@ def video_detect_statistic(args):
             print('Filter File Error!')
             return
 
+    save_txt = args.save_txt
     file_count = 0
     file_class_count_infos = {}
     out_dir = os.path.dirname(out_file_path)
@@ -760,17 +776,31 @@ def video_detect_statistic(args):
         if (file_count % 100) == 0:
             print('Statistic File Count:', file_count)
             # break
-        bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.dat')
-        if not os.path.exists(bbox_file_path):
-            continue
-        bbox_file = open(bbox_file_path, 'rb')
+
+        if save_txt:
+            bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.txt')
+            if not os.path.exists(bbox_file_path):
+                continue
+            bbox_file = open(bbox_file_path, 'r')
+        else:
+            bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.dat')
+            if not os.path.exists(bbox_file_path):
+                continue
+            bbox_file = open(bbox_file_path, 'rb')
 
         class_infos = {}
         for _ in range(bbox_count):
-            bbox_info = bbox_file.read(28)
-            if len(bbox_info) < 28:
-                break
-            bbox_info = struct.unpack('6i1f', bbox_info)
+            if save_txt:
+                bbox_info = bbox_file.readline().strip()
+                if len(bbox_info) < 12:
+                    break
+                bbox_info = bbox_info.split(',')
+                bbox_info = [int(bbox_info[0]), int(bbox_info[1]), int(bbox_info[2]), int(bbox_info[3]), int(bbox_info[4]), int(bbox_info[5]), float(bbox_info[6])]
+            else:
+                bbox_info = bbox_file.read(28)
+                if len(bbox_info) < 28:
+                    break
+                bbox_info = struct.unpack('6i1f', bbox_info)
             frame_id = bbox_info[0]
             label = bbox_info[1]
             if statistic_classes is not None:
