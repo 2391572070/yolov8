@@ -23,8 +23,8 @@ from ultralytics.yolo.utils.downloads import download, safe_download, unzip_file
 from ultralytics.yolo.utils.ops import segments2boxes
 
 HELP_URL = 'See https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
-IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # include image suffixes
-VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv'  # include video suffixes
+IMG_FORMATS = 'bmp', 'dng', 'jpeg', 'jpg', 'mpo', 'png', 'tif', 'tiff', 'webp', 'pfm'  # image suffixes
+VID_FORMATS = 'asf', 'avi', 'gif', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ts', 'wmv', 'webm'  # video suffixes
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv('RANK', -1))
 PIN_MEMORY = str(os.getenv('PIN_MEMORY', True)).lower() == 'true'  # global pin_memory for dataloaders
@@ -211,8 +211,7 @@ def check_det_dataset(dataset, autodownload=True):
     for k in 'train', 'val', 'names':
         if k not in data:
             raise SyntaxError(
-                emojis(f"{dataset} '{k}:' key missing ❌.\n"
-                       f"'train', 'val' and 'names' are required in data.yaml files."))
+                emojis(f"{dataset} '{k}:' key missing ❌.\n'train', 'val' and 'names' are required in all data YAMLs."))
     data['names'] = check_class_names(data['names'])
     data['nc'] = len(data['names'])
 
@@ -237,11 +236,11 @@ def check_det_dataset(dataset, autodownload=True):
     if val:
         val = [Path(x).resolve() for x in (val if isinstance(val, list) else [val])]  # val path
         if not all(x.exists() for x in val):
-            msg = f"\nDataset '{dataset}' not found ⚠️, missing paths %s" % [str(x) for x in val if not x.exists()]
+            m = f"\nDataset '{dataset}' images not found ⚠️, missing paths %s" % [str(x) for x in val if not x.exists()]
             if s and autodownload:
-                LOGGER.warning(msg)
+                LOGGER.warning(m)
             else:
-                raise FileNotFoundError(msg)
+                raise FileNotFoundError(m)
             t = time.time()
             if s.startswith('http') and s.endswith('.zip'):  # URL
                 safe_download(url=s, dir=DATASETS_DIR, delete=True)

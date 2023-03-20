@@ -20,8 +20,8 @@ import requests
 import torch
 from matplotlib import font_manager
 
-from ultralytics.yolo.utils import (AUTOINSTALL, LOGGER, ROOT, USER_CONFIG_DIR, TryExcept, colorstr, downloads, emojis,
-                                    is_colab, is_docker, is_jupyter, is_online)
+from ultralytics.yolo.utils import (AUTOINSTALL, LOGGER, ONLINE, ROOT, USER_CONFIG_DIR, TryExcept, colorstr, downloads,
+                                    emojis, is_colab, is_docker, is_jupyter, is_online, is_pip_package)
 
 
 def is_ascii(s) -> bool:
@@ -134,12 +134,22 @@ def check_latest_pypi_version(package_name='ultralytics'):
     return None
 
 
-def check_pip_update():
-    from ultralytics import __version__
-    latest = check_latest_pypi_version()
-    if pkg.parse_version(__version__) < pkg.parse_version(latest):
-        LOGGER.info(f'New https://pypi.org/project/ultralytics/{latest} available 😃 '
-                    f"Update with 'pip install -U ultralytics'")
+def check_pip_update_available():
+    """
+    Checks if a new version of the ultralytics package is available on PyPI.
+
+    Returns:
+        bool: True if an update is available, False otherwise.
+    """
+    if ONLINE and is_pip_package():
+        with contextlib.suppress(ConnectionError):
+            from ultralytics import __version__
+            latest = check_latest_pypi_version()
+            if pkg.parse_version(__version__) < pkg.parse_version(latest):  # update is available
+                LOGGER.info(f'New https://pypi.org/project/ultralytics/{latest} available 😃 '
+                            f"Update with 'pip install -U ultralytics'")
+                return True
+    return False
 
 
 def check_font(font='Arial.ttf'):
@@ -227,11 +237,11 @@ def check_suffix(file='yolov8n.pt', suffix='.pt', msg=''):
     # Check file(s) for acceptable suffix
     if file and suffix:
         if isinstance(suffix, str):
-            suffix = [suffix]
+            suffix = (suffix, )
         for f in file if isinstance(file, (list, tuple)) else [file]:
             s = Path(f).suffix.lower()  # file suffix
             if len(s):
-                assert s in suffix, f'{msg}{f} acceptable suffix is {suffix}'
+                assert s in suffix, f'{msg}{f} acceptable suffix is {suffix}, not {s}'
 
 
 def check_yolov5u_filename(file: str, verbose: bool = True):
