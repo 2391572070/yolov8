@@ -54,6 +54,7 @@ def parse_args():
     parser.add_argument("--display", action='store_true', help="display detect results")
     parser.add_argument("--display_feat", action='store_true', help="display feat")
     parser.add_argument('--display_feat_labels', default=None, help='Space separated labels of the display feat ', nargs='*', type=int)
+    parser.add_argument("--display_fuse_feat", action='store_true', help="display fuse feat")
     parser.add_argument("--display_feat_use_softmax", action='store_true', help="display feat use softmax")
     parser.add_argument("--pause", action='store_true', help="pause display detect results")
     parser.add_argument('--seq_width', type=int, default=28, help='seq width')
@@ -716,6 +717,7 @@ def video_detect_display(args):
     multi_label = args.multi_label
     display_feat = args.display_feat
     display_feat_use_softmax = args.display_feat_use_softmax
+    display_fuse_feat = args.display_fuse_feat
 
     score_thr = args.conf_thres
     pause = args.pause
@@ -907,6 +909,28 @@ def video_detect_display(args):
                                 fuse_feat_images.append(fuse_feat_image)
                                 cv2.imshow('feat{}'.format(i), feat_image)
                                 cv2.imshow('fuse{}'.format(i), fuse_feat_image)
+                        elif display_fuse_feat:
+                            feats = []
+                            _feats = feat.split(layer_sizes, 1)
+                            for i, layer_shape in enumerate(layer_shapes):
+                                _feat = _feats[i].view(-1, *layer_shape)
+                                if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
+                                    # _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='nearest')[0]
+                                    _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='bilinear',
+                                                          align_corners=False)[0]
+                                feats.append(_feat)
+                            feats = torch.stack(feats, -1)
+                            feats = torch.max(feats, -1)[0]
+                            feat_score, feat_label = torch.max(feats, 0)
+                            feat_image = (color_tensor[feat_label] * feat_score[:, :, None])
+                            if score_thr > 0:
+                                feat_image[feat_score < score_thr] = 0
+                            feat_image = feat_image.numpy().astype(np.uint8)
+                            feat_image = cv2.resize(feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_LINEAR)
+                            alpha = F.interpolate((1 - feat_score)[None, None], size=(image_bgr.shape[0], image_bgr.shape[1]), mode='bilinear', align_corners=False)[0][0][:, :, None].numpy()
+                            fuse_feat_image = (alpha * image_bgr + feat_image).astype(np.uint8)
+                            cv2.imshow('feat', feat_image)
+                            cv2.imshow('fuse', fuse_feat_image)
                         else:
                             if display_feat_use_softmax:
                                 feat = torch.softmax(feat, 0)
