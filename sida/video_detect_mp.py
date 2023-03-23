@@ -14,6 +14,7 @@ import os
 import struct
 import sys
 import torch
+import torch.nn.functional as F
 from collections import OrderedDict
 import multiprocessing
 import random
@@ -51,6 +52,8 @@ def parse_args():
     parser.add_argument("--save_feat", action='store_true', help="save feat")
     parser.add_argument("--save_txt", action='store_true', help="save txt")
     parser.add_argument("--display", action='store_true', help="display detect results")
+    parser.add_argument("--display_feat", action='store_true', help="display feat")
+    parser.add_argument('--display_feat_labels', default=None, help='Space separated labels of the display feat ', nargs='*', type=int)
     parser.add_argument("--pause", action='store_true', help="pause display detect results")
     parser.add_argument('--seq_width', type=int, default=28, help='seq width')
     parser.add_argument('--seq_height', type=int, default=28, help='seq height')
@@ -180,7 +183,8 @@ def video_detect_run(file_queue, out_queue, pid, args):
             return img
 
         def __call__(self, images, orig_w_hs):
-            preds = self.model(self.preprocess(images))
+            images = self.preprocess(images)
+            preds = self.model(images)
             if isinstance(preds, (list, tuple)):
                 preds = preds[0]
             if self.save_feat:
@@ -618,7 +622,76 @@ def random_color(color_list=[], min_color_value=50):
     return color
 
 
+class _CalPadding:
+    """Resize image and padding for detection, instance segmentation, pose"""
+
+    def __init__(self, new_shape=(640, 640), auto=False, scaleFill=False, scaleup=True, stride=32):
+        self.new_shape = new_shape
+        self.auto = auto
+        self.scaleFill = scaleFill
+        self.scaleup = scaleup
+        self.stride = stride
+
+    def __call__(self, image_shape):
+        shape = image_shape  # current shape [height, width]
+        new_shape = self.new_shape
+        if isinstance(new_shape, int):
+            new_shape = (new_shape, new_shape)
+
+        # Scale ratio (new / old)
+        r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+        if not self.scaleup:  # only scale down, do not scale up (for better val mAP)
+            r = min(r, 1.0)
+
+        # Compute padding
+        new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+        dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+        if self.auto:  # minimum rectangle
+            dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)  # wh padding
+        elif self.scaleFill:  # stretch
+            dw, dh = 0.0, 0.0
+            new_unpad = (new_shape[1], new_shape[0])
+
+        dw /= 2  # divide padding into 2 sides
+        dh /= 2
+
+        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+
+        padding_info = (left, top, right, bottom), (new_unpad[0], new_unpad[1]), (
+        new_unpad[0] + left + right, new_unpad[1] + top + bottom)
+        # print('CalPadding:', padding_info)
+        return padding_info
+
+
+class Padding:
+
+    def __init__(self, config):
+        # prepare data
+        imgsz = config.imgsz
+        if isinstance(imgsz, (tuple, list)):
+            if len(imgsz) > 1:
+                self.imgsz = imgsz
+            else:
+                self.imgsz = [imgsz[0], imgsz[0]]
+        else:
+            self.imgsz = [imgsz, imgsz]
+        self.img_transform = None
+
+        self._cal_padding = _CalPadding(self.imgsz, config.auto, stride=config.stride)
+        from ultralytics.yolo.data.augment import LetterBox
+        self._letter_box = LetterBox(self.imgsz, config.auto, stride=config.stride)
+
+    def cal_padding(self, width, height):
+        return self._cal_padding((height, width))
+
+    def __call__(self, image):
+        return self._letter_box(image=image)
+
+
 def video_detect_display(args):
+    from ultralytics.yolo.utils.plotting import Colors
+
     opacity = 0.5
 
     out_file_path = os.path.join(args.out_path, 'video_detect_bbox.txt')
@@ -639,12 +712,25 @@ def video_detect_display(args):
     seq_height = args.seq_height
     seq_size = seq_width*seq_height
 
+    multi_label = args.multi_label
+    display_feat = args.display_feat
+
     score_thr = args.conf_thres
     pause = args.pause
     save_txt = args.save_txt
+    display_feat_labels = args.display_feat_labels
+    if display_feat_labels is not None:
+        display_feat_labels = set(display_feat_labels)
+        if len(display_feat_labels) < 1:
+            display_feat_labels = None
 
-    color_list = []
+    padding = Padding(args)
+
+    # color_list = []
     color_map = {}
+
+    colors = Colors()
+    color_tensor = None
 
     main_win_name = 'video detect'
     cv2.namedWindow(main_win_name, cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO)
@@ -656,21 +742,32 @@ def video_detect_display(args):
         if not os.path.exists(video_path):
             continue
 
+        file_base_name = os.path.splitext(file_name)[0]
         if save_txt:
-            bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.txt')
+            bbox_file_path = os.path.join(out_dir, file_base_name + '.box.txt')
             if not os.path.exists(bbox_file_path):
                 continue
             bbox_file = open(bbox_file_path, 'r')
         else:
-            bbox_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.box.dat')
+            bbox_file_path = os.path.join(out_dir, file_base_name + '.box.dat')
             if not os.path.exists(bbox_file_path):
                 continue
             bbox_file = open(bbox_file_path, 'rb')
-        seq_file_path = os.path.join(out_dir, os.path.splitext(file_name)[0] + '.seq.dat')
+        seq_file_path = os.path.join(out_dir, file_base_name + '.seq.dat')
         if os.path.exists(seq_file_path):
             seq_file = open(seq_file_path, 'rb')
         else:
             seq_file = None
+
+        if display_feat:
+            feat_file_path = os.path.join(out_dir, file_base_name + '.feat.npz')
+            if os.path.exists(feat_file_path):
+                feat_infos = np.load(feat_file_path)
+                frameids = feat_infos['frameids']
+                feats = feat_infos['feats']
+                feat_infos = {frameid: feat for frameid, feat in zip(frameids, feats)}
+            else:
+                feat_infos = None
 
         display_infos = {}
         for _ in range(bbox_count):
@@ -707,7 +804,34 @@ def video_detect_display(args):
 
         cap = cv2.VideoCapture(video_path)
         total_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         rotate = get_video_rotate(video_path)
+        if (rotate == 90) or (rotate == 270):
+            width, height = height, width
+
+        padding_info = padding.cal_padding(width, height)
+        left, top, right, bottom = padding_info[0]
+        ow, oh = padding_info[1]
+        pw, ph = padding_info[2]
+        layer_sizes = []
+        layer_shapes = []
+        align_w = None
+        align_h = None
+        for s in [8, 16, 32]:
+            h, w = ph // s, pw // s
+            layer_sizes.append(h*w)
+            layer_shapes.append((h, w))
+            if align_h is None:
+                align_h = h
+            else:
+                if align_h < h:
+                    align_h = h
+            if align_w is None:
+                align_w = w
+            else:
+                if align_w < w:
+                    align_w = w
         frame_count = 0
         while True:
             grabbed, image_bgr = cap.read()
@@ -716,8 +840,8 @@ def video_detect_display(args):
 
             frame_count += 1
             display_info = display_infos.get(frame_count, None)
-            if display_info is None:
-                continue
+            # if display_info is None:
+            #     continue
 
             if rotate == 90:
                 image_bgr = cv2.flip(cv2.transpose(image_bgr), 1)
@@ -726,22 +850,95 @@ def video_detect_display(args):
             elif rotate == 270:
                 image_bgr = cv2.flip(cv2.transpose(image_bgr), 0)
 
-            height, width = image_bgr.shape[0:2]
-            for label, bbox, score, seq in display_info:
-                color = color_map.get(label, None)
-                if color is None:
-                    color = random_color(color_list)
-                    color_map[label] = color
-                if seq is not None:
-                    seq = cv2.resize(seq.astype(dtype=np.uint8), (int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])), interpolation=cv2.INTER_NEAREST).astype(dtype=np.bool)
-                    roi_image = image_bgr[bbox[1]:bbox[3], bbox[0]:bbox[2]]
-                    roi_image[seq] = (roi_image[seq]*(1-opacity) + opacity*np.array(color, dtype=np.uint8)).astype(np.uint8)
-                cv2.rectangle(image_bgr, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, thickness=2)
-                cv2.putText(image_bgr, '{} {:.2f}'.format(label, score), (bbox[0], bbox[1]-4), cv2.FONT_HERSHEY_COMPLEX, 1, color, thickness=2)
+            # height, width = image_bgr.shape[0:2]
+            if display_info is not None:
+                for label, bbox, score, seq in display_info:
+                    color = color_map.get(label, None)
+                    if color is None:
+                        # color = random_color(color_list)
+                        color = colors(label)
+                        color_map[label] = color
+                    if seq is not None:
+                        seq = cv2.resize(seq.astype(dtype=np.uint8), (int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])), interpolation=cv2.INTER_NEAREST).astype(dtype=np.bool)
+                        roi_image = image_bgr[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+                        roi_image[seq] = (roi_image[seq]*(1-opacity) + opacity*np.array(color, dtype=np.uint8)).astype(np.uint8)
+                    cv2.rectangle(image_bgr, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, thickness=2)
+                    cv2.putText(image_bgr, '{} {:.2f}'.format(label, score), (bbox[0], bbox[1]-4), cv2.FONT_HERSHEY_COMPLEX, 1, color, thickness=2)
 
             cv2.putText(image_bgr, '{}/{}'.format(frame_count, total_frame_count), (8, 64), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 255, 0), thickness=2)
+
+            if display_feat:
+                image_bgr = padding(image_bgr)
+                if feat_infos is not None:
+                    feat = feat_infos.get(frame_count, None)
+                    if feat is not None:
+                        feat = torch.from_numpy(feat[4:, ...]).float()
+                        if color_tensor is None:
+                            color_tensor = torch.tensor([colors(i) for i in range(feat.shape[0])], dtype=torch.uint8)
+                            _colors = color_tensor[:, None].numpy()
+                        if multi_label:
+                            feats = []
+                            _feats = feat.split(layer_sizes, 1)
+                            for i, layer_shape in enumerate(layer_shapes):
+                                _feat = _feats[i].view(-1, *layer_shape)
+                                if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
+                                    # _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='nearest')[0]
+                                    _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='bilinear', align_corners=False)[0]
+                                feats.append(_feat)
+                            feats = torch.stack(feats, -1)
+                            feats = torch.max(feats, -1)[0]
+                            factors = F.interpolate((1-feats)[None], size=(image_bgr.shape[0], image_bgr.shape[1]), mode='bilinear', align_corners=False)[0][:,:,:,None].numpy()
+                            feats = feats.numpy()
+
+                            feat_images = []
+                            fuse_feat_images = []
+                            for i, _feat in enumerate(feats):
+                                if display_feat_labels is not None:
+                                    if i not in display_feat_labels:
+                                        continue
+                                color = _colors[i]
+                                feat_image = (_feat[:, :, None] * color).astype(np.uint8)
+                                feat_images.append(feat_image)
+                                # feat_image = cv2.resize(feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+                                feat_image = cv2.resize(feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_LINEAR)
+                                fuse_feat_image = (factors[i]*image_bgr + feat_image).astype(np.uint8)
+                                fuse_feat_images.append(fuse_feat_image)
+                                cv2.imshow('feat{}'.format(i), feat_image)
+                                cv2.imshow('fuse{}'.format(i), fuse_feat_image)
+                        else:
+                            feat = torch.softmax(feat, 0)
+                            feat_score, feat_label = torch.max(feat, 0)
+                            # feat_label = torch.argmax(feat, 0)
+                            feat_images = color_tensor[feat_label]
+                            feat_images[feat_score < score_thr] = 0
+                            # feat_images[feat_label!=6] = 0
+                            feat_images = feat_images.split(layer_sizes, 0)
+                            _feat_images = []
+                            for i, layer_shape in enumerate(layer_shapes):
+                                feat_image = feat_images[i].view(*layer_shape, -1).numpy()
+                                if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
+                                    feat_image = cv2.resize(feat_image, (align_w, align_h), interpolation=cv2.INTER_NEAREST)
+                                    # feat_image = cv2.resize(feat_image, (align_w, align_h), interpolation=cv2.INTER_LINEAR)
+                                    # feat_image = F.interpolate(feat_image, (align_h, align_w, feat_image.shape[-1]), mode='nearest')
+                                    # feat_image = F.interpolate(feat_image, (align_h, align_w, feat_image.shape[-1]), mode='bilinear', align_corners=False)
+                                _feat_images.append(feat_image)
+                                cv2.imshow('feat{}'.format(i), feat_image)
+
+                            feat_images = _feat_images[::-1]
+                            fuse_feat_image = None
+                            for feat_image in feat_images:
+                                if fuse_feat_image is None:
+                                    fuse_feat_image = feat_image
+                                else:
+                                    mask = feat_image.sum(axis=-1) > 0
+                                    fuse_feat_image[mask] = feat_image[mask]
+                            fuse_feat_image = cv2.resize(fuse_feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+                            cv2.imshow('fuse feat', fuse_feat_image)
+                            mask = 0 != fuse_feat_image
+                            image_bgr[mask] = ((1-opacity)*image_bgr[mask] + opacity*fuse_feat_image[mask]).astype(np.uint8)
+            else:
+                image_bgr = cv2.resize(image_bgr, (width // 2, height // 2))
             print(frame_count)
-            image_bgr = cv2.resize(image_bgr, (width//2, height//2))
             cv2.imshow(main_win_name, image_bgr)
             if pause:
                 key = cv2.waitKey()
