@@ -54,6 +54,7 @@ def parse_args():
     parser.add_argument("--display", action='store_true', help="display detect results")
     parser.add_argument("--display_feat", action='store_true', help="display feat")
     parser.add_argument('--display_feat_labels', default=None, help='Space separated labels of the display feat ', nargs='*', type=int)
+    parser.add_argument("--display_feat_use_softmax", action='store_true', help="display feat use softmax")
     parser.add_argument("--pause", action='store_true', help="pause display detect results")
     parser.add_argument('--seq_width', type=int, default=28, help='seq width')
     parser.add_argument('--seq_height', type=int, default=28, help='seq height')
@@ -714,6 +715,7 @@ def video_detect_display(args):
 
     multi_label = args.multi_label
     display_feat = args.display_feat
+    display_feat_use_softmax = args.display_feat_use_softmax
 
     score_thr = args.conf_thres
     pause = args.pause
@@ -906,11 +908,13 @@ def video_detect_display(args):
                                 cv2.imshow('feat{}'.format(i), feat_image)
                                 cv2.imshow('fuse{}'.format(i), fuse_feat_image)
                         else:
-                            feat = torch.softmax(feat, 0)
+                            if display_feat_use_softmax:
+                                feat = torch.softmax(feat, 0)
                             feat_score, feat_label = torch.max(feat, 0)
                             # feat_label = torch.argmax(feat, 0)
                             feat_images = color_tensor[feat_label]
-                            feat_images[feat_score < score_thr] = 0
+                            if score_thr > 0:
+                                feat_images[feat_score < score_thr] = 0
                             # feat_images[feat_label!=6] = 0
                             feat_images = feat_images.split(layer_sizes, 0)
                             _feat_images = []
