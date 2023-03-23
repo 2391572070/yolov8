@@ -1,3 +1,5 @@
+sync && echo 3 > /proc/sys/vm/drop_caches
+
 python: No module named torch.distributed.run
 将torch.distributed.run 换成 torch.distributed.launch 即可
 
@@ -49,9 +51,34 @@ yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s_relu_pre.yaml
 yolo task=detect mode=val name=sida_yolov8s_relu_8gpu_val model=runs/detect/sida_yolov8s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
 yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_val model=runs/detect/sida_yolov8s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
 
-sync && echo 3 > /proc/sys/vm/drop_caches
 
 yolo task=detect mode=train cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml
 
 
 yolo task=detect mode=predict show=True name=sida_yolov8s_pre_8gpu_video model=runs/detect/sida_yolov8s_pre_8gpu/weights/last.pt source=/media/kasim/DataSet/ElevatorRecord/alarm/alarm_video/MOTO_ENTER_ALARM/290b1000010a05000008393443595350/video1/20221115/20221115_145153_10a0500000839344.mp4
+
+
+python3 sida/video_detect_mp.py
+--base_path
+/media/erised/fast-storage/dev/ElevatorRecord/part8
+--list_file
+/media/erised/fast-storage/dev/ElevatorRecord/part8/video_list8.txt
+--out_path
+/media/erised/fast-storage/dev/ElevatorRecord/part8_detect_yolov8
+--checkpoint
+runs/detect/sida_yolov8m_pre_8gpu/weights/last.pt
+--imgsz
+640
+384
+--multi_label
+--conf_thres
+0.1
+--proccess_count
+32
+--gpu_id_offset
+1
+--gpu_count
+8
+--batch_size
+8
+--save_txt

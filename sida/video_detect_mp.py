@@ -48,6 +48,7 @@ def parse_args():
     parser.add_argument('--fps', type=int, default=None, help='fps')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--name', type=str, default='', help='out name')
+    parser.add_argument("--save_feat", action='store_true', help="save feat")
     parser.add_argument("--save_txt", action='store_true', help="save txt")
     parser.add_argument("--display", action='store_true', help="display detect results")
     parser.add_argument("--pause", action='store_true', help="pause display detect results")
@@ -95,6 +96,7 @@ def get_video_rotate(video_path):
 
 
 def process_detect_func(results, frameids, score_thr, min_area):
+    results, pred_feats = results
     bbox_count = 0
     frameid_list = []
     label_list = []
@@ -134,6 +136,9 @@ def process_detect_func(results, frameids, score_thr, min_area):
     results_dict['bbox'] = bboxes_list
     results_dict['seg'] = None
     results_dict['frame_count'] = len(frameids)
+    if pred_feats is not None:
+        results_dict['feat_frameids'] = frameids
+        results_dict['feat'] = pred_feats.cpu().share_memory_()
 
     return bbox_count, results_dict
 
@@ -157,6 +162,7 @@ def video_detect_run(file_queue, out_queue, pid, args):
             self.agnostic_nms = config.agnostic_nms
             self.max_det = config.max_det
             self.multi_label = config.multi_label
+            self.save_feat = config.save_feat
             self.device = select_device(device)
             with torch.no_grad():
                 self.model = AutoBackend(checkpoint, device=self.device)
@@ -175,18 +181,22 @@ def video_detect_run(file_queue, out_queue, pid, args):
 
         def __call__(self, images, orig_w_hs):
             preds = self.model(self.preprocess(images))
-            # if isinstance(preds, (list, tuple)):
-            #     preds = preds[0]
+            if isinstance(preds, (list, tuple)):
+                preds = preds[0]
+            if self.save_feat:
+                pred_feats = preds.half()
             preds = ops.non_max_suppression(preds, self.conf_thres, self.iou_thres, agnostic=self.agnostic_nms,
                                             multi_label=self.multi_label, max_det=self.max_det, classes=self.classes)
-
             shape = images.shape[2:]
             results = []
             for pred, orig_w_h in zip(preds, orig_w_hs):
                 orig_shape = [orig_w_h[1], orig_w_h[0]]
                 pred[:, :4] = ops.scale_boxes(shape, pred[:, :4], orig_shape).round()
                 results.append(pred)
-            return results
+            if self.save_feat:
+                return results, pred_feats
+            else:
+                return results, None
 
     def init_model_func(args):
         detecter = Detection(args, checkpoint=args.checkpoint, device=device)
@@ -394,6 +404,9 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                             _total_frame_count = total_frame_count
                         print('{} {}/{} {} {} Process Id {}: {} - {}, FPS {:.3f} {:.3f}'.format((end_time - begin_time), file_count, total_file_count, total_frame_count, _total_frame_count, pid, file_name, index, fps1, fps2))
 
+                    feat_frameids = results_dict.pop('feat_frameids', None)
+                    feats = results_dict.pop('feat', None)
+
                     segs = results_dict.pop('seg', None)
                     results_info = file_results.get(file_name, None)
                     if results_info is None:
@@ -412,7 +425,12 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                             out_seq_file = open(out_seq_file_path, 'wb')
                         else:
                             out_seq_file = None
-                        file_results[file_name] = [1, obj_count, out_bbox_file, out_seq_file]
+                        if feats is not None:
+                            out_feat_file_path = out_base_name + '.feat.npz'
+                            out_feat_infos = [out_feat_file_path, []]
+                        else:
+                            out_feat_infos = None
+                        file_results[file_name] = [1, obj_count, out_bbox_file, out_seq_file, out_feat_infos]
                         if obj_count > 0:
                             results_name = results_dict.keys()
                             if not has_write_title:
@@ -432,6 +450,7 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                         results_info[1] += obj_count
                         out_bbox_file = results_info[2]
                         out_seq_file = results_info[3]
+                        out_feat_infos = results_info[4]
                     # write
                     if out_bbox_file:
                         for i in range(obj_count):
@@ -448,6 +467,8 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                         segs = segs.numpy()
                         # print(segs.dtype, segs.shape)
                         segs.tofile(out_seq_file)
+                    if (out_feat_infos is not None) and (feats is not None) and (feat_frameids is not None):
+                        out_feat_infos[1].append([feat_frameids, feats.numpy()])
 
                 for file_name, result_count in file_result_count.items():
                     results_info = file_results.get(file_name, None)
@@ -461,6 +482,21 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                         out_seq_file = results_info[3]
                         if out_seq_file is not None:
                             out_seq_file.close()
+                        out_feat_infos = results_info[4]
+                        if out_feat_infos is not None:
+                            if len(out_feat_infos) > 0:
+                                out_feat_file_path = out_feat_infos[0]
+                                out_feat_info_list = out_feat_infos[1]
+                                out_feat_info_list.sort(key=lambda x: x[0][0])
+                                out_frameids = []
+                                out_feats = []
+                                for frameids, feats in out_feat_info_list:
+                                    out_frameids.extend(frameids)
+                                    out_feats.extend(feats)
+                                out_feats = np.stack(out_feats, 0)
+                                np.savez_compressed(out_feat_file_path, frameids=out_frameids, feats=out_feats)
+                                out_frameids = None
+                                out_feats = None
                         file_count += 1
                         line_str = '{},{}\n'.format(file_name, results_info[1])
                         out_file.write(line_str)
