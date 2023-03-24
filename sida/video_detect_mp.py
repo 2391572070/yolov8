@@ -54,7 +54,6 @@ def parse_args():
     parser.add_argument("--save_txt", action='store_true', help="save txt")
     parser.add_argument("--display", action='store_true', help="display detect results")
     parser.add_argument("--display_feat", action='store_true', help="display feat")
-    parser.add_argument('--display_feat_labels', default=None, help='Space separated labels of the display feat ', nargs='*', type=int)
     parser.add_argument("--display_fuse_feat", action='store_true', help="display fuse feat")
     parser.add_argument('--display_fuse_mode', type=int, default=0, help='display fuse mode')
     parser.add_argument("--display_feat_use_softmax", action='store_true', help="display feat use softmax")
@@ -756,6 +755,25 @@ def video_detect_display(args):
             print('Filter File Error!')
             return
 
+    if args.classes is not None:
+        classes = set(args.classes)
+        if len(classes) < 1:
+            classes = None
+    else:
+        classes = None
+
+    label_names = set()
+    if args.checkpoint is not None:
+        if os.path.exists(args.checkpoint):
+            with torch.no_grad():
+                with open(args.checkpoint, 'rb') as file:
+                    model = torch.load(file, map_location='cpu')
+                # from ultralytics.nn.autobackend import AutoBackend
+                # model = AutoBackend(args.checkpoint)
+                model_info = model.get('model', None)
+                if model_info is not None:
+                    label_names = model_info.names
+
     seq_width = args.seq_width
     seq_height = args.seq_height
     seq_size = seq_width*seq_height
@@ -770,11 +788,6 @@ def video_detect_display(args):
     score_thr = args.conf_thres
     pause = args.pause
     save_txt = args.save_txt
-    display_feat_labels = args.display_feat_labels
-    if display_feat_labels is not None:
-        display_feat_labels = set(display_feat_labels)
-        if len(display_feat_labels) < 1:
-            display_feat_labels = None
 
     padding = Padding(args)
 
@@ -905,6 +918,9 @@ def video_detect_display(args):
             # height, width = image_bgr.shape[0:2]
             if display_info is not None:
                 for label, bbox, score, seq in display_info:
+                    if classes is not None:
+                        if label not in classes:
+                            continue
                     color = color_map.get(label, None)
                     if color is None:
                         # color = random_color(color_list)
@@ -915,7 +931,7 @@ def video_detect_display(args):
                         roi_image = image_bgr[bbox[1]:bbox[3], bbox[0]:bbox[2]]
                         roi_image[seq] = (roi_image[seq]*(1-opacity) + opacity*np.array(color, dtype=np.uint8)).astype(np.uint8)
                     cv2.rectangle(image_bgr, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color, thickness=2)
-                    cv2.putText(image_bgr, '{} {:.2f}'.format(label, score), (bbox[0], bbox[1]-4), cv2.FONT_HERSHEY_COMPLEX, 1, color, thickness=2)
+                    cv2.putText(image_bgr, '{} {:.2f}'.format(label_names.get(label, label), score), (bbox[0], bbox[1]-4), cv2.FONT_HERSHEY_COMPLEX, 1, color, thickness=2)
 
             cv2.putText(image_bgr, '{}/{}'.format(frame_count, total_frame_count), (8, 64), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 255, 0), thickness=2)
 
@@ -946,8 +962,8 @@ def video_detect_display(args):
                                 feat_images = []
                                 fuse_feat_images = []
                                 for i, _feat in enumerate(feats):
-                                    if display_feat_labels is not None:
-                                        if i not in display_feat_labels:
+                                    if classes is not None:
+                                        if i not in classes:
                                             continue
                                     color = _colors[i]
                                     feat_image = (_feat[:, :, None] * color).astype(np.uint8)
@@ -1004,7 +1020,6 @@ def video_detect_display(args):
                                 feat_images = color_tensor[feat_label]
                                 if score_thr > 0:
                                     feat_images[feat_score < score_thr] = 0
-                                # feat_images[feat_label!=6] = 0
                                 feat_images = feat_images.split(layer_sizes, 0)
                                 _feat_images = []
                                 for i, layer_shape in enumerate(layer_shapes):
