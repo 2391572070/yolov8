@@ -49,6 +49,7 @@ def parse_args():
     parser.add_argument('--fps', type=int, default=None, help='fps')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--name', type=str, default='', help='out name')
+    parser.add_argument("--feat_mode", type=int, default=0, help='save feat mode, 0 is all feat, 1 is only fuse label feat')
     parser.add_argument("--save_feat", action='store_true', help="save feat")
     parser.add_argument("--save_txt", action='store_true', help="save txt")
     parser.add_argument("--display", action='store_true', help="display detect results")
@@ -100,8 +101,8 @@ def get_video_rotate(video_path):
     return rotate
 
 
-def process_detect_func(results, frameids, score_thr, min_area):
-    results, pred_feats = results
+def process_detect_func(results, frameids, score_thr, min_area, feat_mode):
+    results, pred_feats, feat_shapes = results
     bbox_count = 0
     frameid_list = []
     label_list = []
@@ -143,6 +144,24 @@ def process_detect_func(results, frameids, score_thr, min_area):
     results_dict['frame_count'] = len(frameids)
     if pred_feats is not None:
         results_dict['feat_frameids'] = frameids
+        if 1 == feat_mode:
+            feat_sizes = [h*w for h, w in feat_shapes]
+            pred_feats = pred_feats[:, 4:, ...]
+            bs, n = pred_feats.shape[:2]
+            pred_feats = pred_feats.split(feat_sizes, -1)
+            feats = []
+            align_h, align_w = feat_shapes[0]
+            for i, (h, w) in enumerate(feat_shapes):
+                feat = pred_feats[i].view(bs, n, h, w)
+                if (h != align_h) or (w != align_w):
+                    # feat = F.interpolate(feat, size=(align_h, align_w), mode='nearest')
+                    feat = F.interpolate(feat, size=(align_h, align_w), mode='bilinear', align_corners=False)
+                feats.append(feat)
+            feats = torch.stack(feats, -1)
+            feats = torch.max(feats, -1)[0]
+            feat_score, feat_label = torch.max(feats, 1)
+            feat_label = feat_label.to(dtype=feat_score.dtype)
+            pred_feats = torch.stack((feat_label, feat_score), 1)
         results_dict['feat'] = pred_feats.cpu().share_memory_()
 
     return bbox_count, results_dict
@@ -189,6 +208,14 @@ def video_detect_run(file_queue, out_queue, pid, args):
             preds = self.model(images)
             if isinstance(preds, (list, tuple)):
                 preds = preds[0]
+            feat_shapes = []
+            ih, iw = images.shape[2:4]
+            div = 8
+            for _ in range(3):
+                h, w = ih // div, iw // div
+                feat_shapes.append((h, w))
+                div *= 2
+
             if self.save_feat:
                 pred_feats = preds.half()
             preds = ops.non_max_suppression(preds, self.conf_thres, self.iou_thres, agnostic=self.agnostic_nms,
@@ -200,9 +227,9 @@ def video_detect_run(file_queue, out_queue, pid, args):
                 pred[:, :4] = ops.scale_boxes(shape, pred[:, :4], orig_shape).round()
                 results.append(pred)
             if self.save_feat:
-                return results, pred_feats
+                return results, pred_feats, feat_shapes
             else:
-                return results, None
+                return results, None, None
 
     def init_model_func(args):
         detecter = Detection(args, checkpoint=args.checkpoint, device=device)
@@ -225,7 +252,7 @@ def video_detect_run(file_queue, out_queue, pid, args):
                     # images.requires_grad = False
                     # images = images.cuda(non_blocking=True)
                     results = model(images, w_hs)
-                    results = process_detect_func(results, frameids, args.conf_thres, args.min_area)
+                    results = process_detect_func(results, frameids, args.conf_thres, args.min_area, args.feat_mode)
                 else:
                     results = None
 
@@ -718,6 +745,7 @@ def video_detect_display(args):
     display_feat = args.display_feat
     display_feat_use_softmax = args.display_feat_use_softmax
     display_fuse_feat = args.display_fuse_feat
+    feat_mode = args.feat_mode
 
     score_thr = args.conf_thres
     pause = args.pause
@@ -876,53 +904,102 @@ def video_detect_display(args):
                 if feat_infos is not None:
                     feat = feat_infos.get(frame_count, None)
                     if feat is not None:
-                        feat = torch.from_numpy(feat[4:, ...]).float()
-                        if color_tensor is None:
-                            color_tensor = torch.tensor([colors(i) for i in range(feat.shape[0])], dtype=torch.uint8)
-                            _colors = color_tensor[:, None].numpy()
-                        if multi_label:
-                            feats = []
-                            _feats = feat.split(layer_sizes, 1)
-                            for i, layer_shape in enumerate(layer_shapes):
-                                _feat = _feats[i].view(-1, *layer_shape)
-                                if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
-                                    # _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='nearest')[0]
-                                    _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='bilinear', align_corners=False)[0]
-                                feats.append(_feat)
-                            feats = torch.stack(feats, -1)
-                            feats = torch.max(feats, -1)[0]
-                            factors = F.interpolate((1-feats)[None], size=(image_bgr.shape[0], image_bgr.shape[1]), mode='bilinear', align_corners=False)[0][:,:,:,None].numpy()
-                            feats = feats.numpy()
+                        if 0 == feat_mode:
+                            if color_tensor is None:
+                                color_tensor = torch.tensor([colors(i) for i in range(feat.shape[0])], dtype=torch.uint8)
+                                _colors = color_tensor[:, None].numpy()
+                            feat = torch.from_numpy(feat[4:, ...]).float()
+                            if multi_label:
+                                feats = []
+                                _feats = feat.split(layer_sizes, -1)
+                                for i, layer_shape in enumerate(layer_shapes):
+                                    _feat = _feats[i].view(-1, *layer_shape)
+                                    if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
+                                        # _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='nearest')[0]
+                                        _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='bilinear', align_corners=False)[0]
+                                    feats.append(_feat)
+                                feats = torch.stack(feats, -1)
+                                feats = torch.max(feats, -1)[0]
+                                factors = F.interpolate((1-feats)[None], size=(image_bgr.shape[0], image_bgr.shape[1]), mode='bilinear', align_corners=False)[0][:,:,:,None].numpy()
+                                feats = feats.numpy()
 
-                            feat_images = []
-                            fuse_feat_images = []
-                            for i, _feat in enumerate(feats):
-                                if display_feat_labels is not None:
-                                    if i not in display_feat_labels:
-                                        continue
-                                color = _colors[i]
-                                feat_image = (_feat[:, :, None] * color).astype(np.uint8)
-                                feat_images.append(feat_image)
-                                # feat_image = cv2.resize(feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+                                feat_images = []
+                                fuse_feat_images = []
+                                for i, _feat in enumerate(feats):
+                                    if display_feat_labels is not None:
+                                        if i not in display_feat_labels:
+                                            continue
+                                    color = _colors[i]
+                                    feat_image = (_feat[:, :, None] * color).astype(np.uint8)
+                                    feat_images.append(feat_image)
+                                    # feat_image = cv2.resize(feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+                                    feat_image = cv2.resize(feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_LINEAR)
+                                    fuse_feat_image = (factors[i]*image_bgr + feat_image).astype(np.uint8)
+                                    fuse_feat_images.append(fuse_feat_image)
+                                    cv2.imshow('feat{}'.format(i), feat_image)
+                                    cv2.imshow('fuse{}'.format(i), fuse_feat_image)
+                            elif display_fuse_feat:
+                                feats = []
+                                _feats = feat.split(layer_sizes, -1)
+                                for i, layer_shape in enumerate(layer_shapes):
+                                    _feat = _feats[i].view(-1, *layer_shape)
+                                    if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
+                                        # _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='nearest')[0]
+                                        _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='bilinear',
+                                                              align_corners=False)[0]
+                                    feats.append(_feat)
+                                feats = torch.stack(feats, -1)
+                                feats = torch.max(feats, -1)[0]
+                                feat_score, feat_label = torch.max(feats, 0)
+                                feat_image = (color_tensor[feat_label] * feat_score[:, :, None])
+                                if score_thr > 0:
+                                    feat_image[feat_score < score_thr] = 0
+                                feat_image = feat_image.numpy().astype(np.uint8)
                                 feat_image = cv2.resize(feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_LINEAR)
-                                fuse_feat_image = (factors[i]*image_bgr + feat_image).astype(np.uint8)
-                                fuse_feat_images.append(fuse_feat_image)
-                                cv2.imshow('feat{}'.format(i), feat_image)
-                                cv2.imshow('fuse{}'.format(i), fuse_feat_image)
-                        elif display_fuse_feat:
-                            feats = []
-                            _feats = feat.split(layer_sizes, 1)
-                            for i, layer_shape in enumerate(layer_shapes):
-                                _feat = _feats[i].view(-1, *layer_shape)
-                                if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
-                                    # _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='nearest')[0]
-                                    _feat = F.interpolate(_feat[None], size=(align_h, align_w), mode='bilinear',
-                                                          align_corners=False)[0]
-                                feats.append(_feat)
-                            feats = torch.stack(feats, -1)
-                            feats = torch.max(feats, -1)[0]
-                            feat_score, feat_label = torch.max(feats, 0)
-                            feat_image = (color_tensor[feat_label] * feat_score[:, :, None])
+                                alpha = F.interpolate((1 - feat_score)[None, None], size=(image_bgr.shape[0], image_bgr.shape[1]), mode='bilinear', align_corners=False)[0][0][:, :, None].numpy()
+                                fuse_feat_image = (alpha * image_bgr + feat_image).astype(np.uint8)
+                                cv2.imshow('feat', feat_image)
+                                cv2.imshow('fuse', fuse_feat_image)
+                            else:
+                                if display_feat_use_softmax:
+                                    feat = torch.softmax(feat, 0)
+                                feat_score, feat_label = torch.max(feat, 0)
+                                # feat_label = torch.argmax(feat, 0)
+                                feat_images = color_tensor[feat_label]
+                                if score_thr > 0:
+                                    feat_images[feat_score < score_thr] = 0
+                                # feat_images[feat_label!=6] = 0
+                                feat_images = feat_images.split(layer_sizes, 0)
+                                _feat_images = []
+                                for i, layer_shape in enumerate(layer_shapes):
+                                    feat_image = feat_images[i].view(*layer_shape, -1).numpy()
+                                    if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
+                                        feat_image = cv2.resize(feat_image, (align_w, align_h), interpolation=cv2.INTER_NEAREST)
+                                        # feat_image = cv2.resize(feat_image, (align_w, align_h), interpolation=cv2.INTER_LINEAR)
+                                        # feat_image = F.interpolate(feat_image, (align_h, align_w, feat_image.shape[-1]), mode='nearest')
+                                        # feat_image = F.interpolate(feat_image, (align_h, align_w, feat_image.shape[-1]), mode='bilinear', align_corners=False)
+                                    _feat_images.append(feat_image)
+                                    cv2.imshow('feat{}'.format(i), feat_image)
+
+                                feat_images = _feat_images[::-1]
+                                fuse_feat_image = None
+                                for feat_image in feat_images:
+                                    if fuse_feat_image is None:
+                                        fuse_feat_image = feat_image
+                                    else:
+                                        mask = feat_image.sum(axis=-1) > 0
+                                        fuse_feat_image[mask] = feat_image[mask]
+                                fuse_feat_image = cv2.resize(fuse_feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
+                                cv2.imshow('fuse feat', fuse_feat_image)
+                                mask = 0 != fuse_feat_image
+                                image_bgr[mask] = ((1-opacity)*image_bgr[mask] + opacity*fuse_feat_image[mask]).astype(np.uint8)
+                        elif 1 == feat_mode:
+                            if color_tensor is None:
+                                color_tensor = torch.tensor([colors(i) for i in range(128)], dtype=torch.uint8)
+                            feat = torch.from_numpy(feat)
+                            feat_label = feat[0].long()
+                            feat_score = feat[1].float()
+                            feat_image = color_tensor[feat_label] * feat_score[:, :, None]
                             if score_thr > 0:
                                 feat_image[feat_score < score_thr] = 0
                             feat_image = feat_image.numpy().astype(np.uint8)
@@ -931,39 +1008,6 @@ def video_detect_display(args):
                             fuse_feat_image = (alpha * image_bgr + feat_image).astype(np.uint8)
                             cv2.imshow('feat', feat_image)
                             cv2.imshow('fuse', fuse_feat_image)
-                        else:
-                            if display_feat_use_softmax:
-                                feat = torch.softmax(feat, 0)
-                            feat_score, feat_label = torch.max(feat, 0)
-                            # feat_label = torch.argmax(feat, 0)
-                            feat_images = color_tensor[feat_label]
-                            if score_thr > 0:
-                                feat_images[feat_score < score_thr] = 0
-                            # feat_images[feat_label!=6] = 0
-                            feat_images = feat_images.split(layer_sizes, 0)
-                            _feat_images = []
-                            for i, layer_shape in enumerate(layer_shapes):
-                                feat_image = feat_images[i].view(*layer_shape, -1).numpy()
-                                if (layer_shape[0] != align_h) or (layer_shape[1] != align_w):
-                                    feat_image = cv2.resize(feat_image, (align_w, align_h), interpolation=cv2.INTER_NEAREST)
-                                    # feat_image = cv2.resize(feat_image, (align_w, align_h), interpolation=cv2.INTER_LINEAR)
-                                    # feat_image = F.interpolate(feat_image, (align_h, align_w, feat_image.shape[-1]), mode='nearest')
-                                    # feat_image = F.interpolate(feat_image, (align_h, align_w, feat_image.shape[-1]), mode='bilinear', align_corners=False)
-                                _feat_images.append(feat_image)
-                                cv2.imshow('feat{}'.format(i), feat_image)
-
-                            feat_images = _feat_images[::-1]
-                            fuse_feat_image = None
-                            for feat_image in feat_images:
-                                if fuse_feat_image is None:
-                                    fuse_feat_image = feat_image
-                                else:
-                                    mask = feat_image.sum(axis=-1) > 0
-                                    fuse_feat_image[mask] = feat_image[mask]
-                            fuse_feat_image = cv2.resize(fuse_feat_image, (image_bgr.shape[1], image_bgr.shape[0]), interpolation=cv2.INTER_NEAREST)
-                            cv2.imshow('fuse feat', fuse_feat_image)
-                            mask = 0 != fuse_feat_image
-                            image_bgr[mask] = ((1-opacity)*image_bgr[mask] + opacity*fuse_feat_image[mask]).astype(np.uint8)
             else:
                 image_bgr = cv2.resize(image_bgr, (width // 2, height // 2))
             print(frame_count)
