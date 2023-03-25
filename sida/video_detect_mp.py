@@ -749,7 +749,11 @@ def video_detect_display(args):
                 for line in file.readlines():
                     lines = line.strip().split(',')
                     file_name = lines[0]
-                    file_name_bbox_counts.append([file_name, int(lines[1])])
+                    if len(lines) > 1:
+                        bbox_count = int(lines[1])
+                    else:
+                        bbox_count = None
+                    file_name_bbox_counts.append([file_name, bbox_count])
         except Exception as e:
             print(e)
             print('Filter File Error!')
@@ -813,6 +817,9 @@ def video_detect_display(args):
             if not os.path.exists(bbox_file_path):
                 continue
             bbox_file = open(bbox_file_path, 'r')
+            if bbox_count is None:
+                bbox_count = len(bbox_file.readlines())
+                bbox_file.seek(0)
         else:
             bbox_file_path = os.path.join(out_dir, file_base_name + '.box.dat')
             if not os.path.exists(bbox_file_path):
