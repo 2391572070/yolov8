@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument('--fps', type=int, default=None, help='fps')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--name', type=str, default='', help='out name')
-    parser.add_argument("--feat_mode", type=int, default=0, help='save feat mode, 0 is all feat, 1 is only fuse label feat')
+    parser.add_argument("--feat_mode", type=int, default=1, help='save feat mode, 0 is all feat, 1 is only class feat, 2 is only fuse label feat, 3 is only fuse label feat but large feat map on toper')
     parser.add_argument("--save_feat", action='store_true', help="save feat")
     parser.add_argument("--save_txt", action='store_true', help="save txt")
     parser.add_argument("--display", action='store_true', help="display detect results")
@@ -144,7 +144,9 @@ def process_detect_func(results, frameids, score_thr, min_area, feat_mode):
     results_dict['frame_count'] = len(frameids)
     if pred_feats is not None:
         results_dict['feat_frameids'] = frameids
-        if 0 < feat_mode:
+        if 1 == feat_mode:
+            pred_feats = pred_feats[:, 4:, ...]
+        elif 1 < feat_mode:
             feat_sizes = [h*w for h, w in feat_shapes]
             pred_feats = pred_feats[:, 4:, ...]
             bs, n = pred_feats.shape[:2]
@@ -947,11 +949,14 @@ def video_detect_display(args):
                 if feat_infos is not None:
                     feat = feat_infos.get(frame_count, None)
                     if feat is not None:
-                        if 0 == feat_mode:
+                        if feat_mode <= 1:
                             if color_tensor is None:
                                 color_tensor = torch.tensor([colors(i) for i in range(feat.shape[0])], dtype=torch.uint8)
                                 _colors = color_tensor[:, None].numpy()
-                            feat = torch.from_numpy(feat[4:, ...]).float()
+                            if 1 == feat_mode:
+                                feat = torch.from_numpy(feat).float()
+                            else:
+                                feat = torch.from_numpy(feat[4:, ...]).float()
                             if multi_label:
                                 feats = []
                                 _feats = feat.split(layer_sizes, -1)
@@ -1051,7 +1056,7 @@ def video_detect_display(args):
                                 cv2.imshow('fuse feat', fuse_feat_image)
                                 mask = 0 != fuse_feat_image
                                 image_bgr[mask] = ((1-opacity)*image_bgr[mask] + opacity*fuse_feat_image[mask]).astype(np.uint8)
-                        elif 0 < feat_mode:
+                        elif 1 < feat_mode:
                             if color_tensor is None:
                                 color_tensor = torch.tensor([colors(i) for i in range(128)], dtype=torch.uint8)
                             feat = torch.from_numpy(feat)
