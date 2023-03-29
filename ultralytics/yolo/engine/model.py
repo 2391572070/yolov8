@@ -2,10 +2,11 @@
 
 import sys
 from pathlib import Path
+from typing import Union
 
 from ultralytics import yolo  # noqa
 from ultralytics.nn.tasks import (ClassificationModel, DetectionModel, SegmentationModel, attempt_load_one_weight,
-                                  guess_model_task, nn)
+                                  guess_model_task, nn, yaml_model_load)
 from ultralytics.yolo.cfg import get_cfg
 from ultralytics.yolo.engine.exporter import Exporter
 from ultralytics.yolo.utils import (DEFAULT_CFG, DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, RANK, ROOT, callbacks,
@@ -67,7 +68,7 @@ class YOLO:
         list(ultralytics.yolo.engine.results.Results): The prediction results.
     """
 
-    def __init__(self, model='yolov8n.pt', task=None, session=None) -> None:
+    def __init__(self, model: Union[str, Path] = 'yolov8n.pt', task=None, session=None) -> None:
         """
         Initializes the YOLO model.
 
@@ -87,6 +88,7 @@ class YOLO:
         self.session = session  # HUB session
 
         # Load or create new YOLO model
+        model = str(model).strip()  # strip spaces
         suffix = Path(model).suffix
         if not suffix and Path(model).stem in GITHUB_ASSET_STEMS:
             model, suffix = Path(model).with_suffix('.pt'), '.pt'  # add suffix, i.e. yolov8n -> yolov8n.pt
@@ -111,8 +113,8 @@ class YOLO:
             task (str) or (None): model task
             verbose (bool): display model info on load
         """
-        self.cfg = check_yaml(cfg)  # check YAML
-        cfg_dict = yaml_load(self.cfg, append_filename=True)  # model dict
+        cfg_dict = yaml_model_load(cfg)
+        self.cfg = cfg
         self.task = task or guess_model_task(cfg_dict)
         self.model = TASK_MAP[self.task][0](cfg_dict, verbose=verbose and RANK == -1)  # build model
         self.overrides['model'] = self.cfg
@@ -142,6 +144,7 @@ class YOLO:
             self.task = task or guess_model_task(weights)
             self.ckpt_path = weights
         self.overrides['model'] = weights
+        self.overrides['task'] = self.task
 
     def _check_is_pytorch_model(self):
         """

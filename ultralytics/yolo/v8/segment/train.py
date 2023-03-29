@@ -79,7 +79,7 @@ class SegLoss(Loss):
         # targets
         try:
             batch_idx = batch['batch_idx'].view(-1, 1)
-            targets = torch.cat((batch_idx, batch['cls'].view(-1, 1), batch['bboxes']), 1)
+            targets = torch.cat((batch_idx, batch['cls'].view(-1, 1), batch['bboxes'].to(dtype)), 1)
             targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
             gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
             mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
@@ -122,13 +122,15 @@ class SegLoss(Loss):
                     xyxyn = target_bboxes[i][fg_mask[i]] / imgsz[[1, 0, 1, 0]]
                     marea = xyxy2xywh(xyxyn)[:, 2:].prod(1)
                     mxyxy = xyxyn * torch.tensor([mask_w, mask_h, mask_w, mask_h], device=self.device)
-                    loss[1] += self.single_mask_loss(gt_mask, pred_masks[i][fg_mask[i]], proto[i], mxyxy,
-                                                     marea)  # seg loss
-        # WARNING: Uncomment lines below in case of Multi-GPU DDP unused gradient errors
-        #         else:
-        #             loss[1] += proto.sum() * 0 + pred_masks.sum() * 0
-        # else:
-        #     loss[1] += proto.sum() * 0 + pred_masks.sum() * 0
+                    loss[1] += self.single_mask_loss(gt_mask, pred_masks[i][fg_mask[i]], proto[i], mxyxy, marea)  # seg
+
+                # WARNING: lines below prevents Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
+                else:
+                    loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
+
+        # WARNING: lines below prevent Multi-GPU DDP 'unused gradient' PyTorch errors, do not remove
+        else:
+            loss[1] += (proto * 0).sum() + (pred_masks * 0).sum()  # inf sums may lead to nan loss
 
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.box / batch_size  # seg gain
