@@ -176,6 +176,8 @@ class Exporter:
         if file.suffix == '.yaml':
             file = Path(file.name)
 
+        sida_deploy = getattr(self.args, 'sida_deploy', False)
+
         # Update model
         model = deepcopy(model).to(self.device)
         for p in model.parameters():
@@ -184,6 +186,10 @@ class Exporter:
         model.float()
         model = model.fuse()
         for k, m in model.named_modules():
+            if sida_deploy:
+                forward_export = getattr(m, 'forward_export', None)
+                if forward_export is not None:
+                    m.forward = m.forward_export
             if isinstance(m, (Detect, Segment)):
                 m.dynamic = self.args.dynamic
                 m.export = True
