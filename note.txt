@@ -82,3 +82,6 @@ runs/detect/sida_yolov8m_pre_8gpu/weights/last.pt
 --batch_size
 8
 --save_txt
+
+
+yolo task=detect mode=train data=data=ultralytics/datasets/coco_v8.yaml cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml name=coco_yolov5s_relu_8gpu
