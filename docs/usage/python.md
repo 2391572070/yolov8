@@ -59,7 +59,6 @@ accurately predict the classes and locations of objects in an image.
 
     === "Resume"
         ```python
-        # TODO: Resume feature is under development and should be released soon.
         model = YOLO("last.pt")
         model.train(resume=True)
         ```
@@ -150,7 +149,8 @@ predicts the classes and locations of objects in the input images or videos.
 
             # segmentation
             result.masks.masks     # masks, (N, H, W)
-            result.masks.segments  # bounding coordinates of masks, List[segment] * N
+            result.masks.xy        # x,y segments (pixels), List[segment] * N
+            result.masks.xyn       # x,y segments (normalized), List[segment] * N
 
             # classification
             result.probs     # cls prob, (num_class, )

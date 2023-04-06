@@ -73,7 +73,7 @@ task.
 | `deterministic`   | `True`   | whether to enable deterministic mode                                        |
 | `single_cls`      | `False`  | train multi-class data as single-class                                      |
 | `image_weights`   | `False`  | use weighted image selection for training                                   |
-| `rect`            | `False`  | support rectangular training                                                |
+| `rect`            | `False`  | rectangular training with each batch collated for minimum padding           |
 | `cos_lr`          | `False`  | use cosine learning rate scheduler                                          |
 | `close_mosaic`    | `10`     | disable mosaic augmentation for final 10 epochs                             |
 | `resume`          | `False`  | resume training from last checkpoint                                        |
@@ -88,6 +88,8 @@ task.
 | `box`             | `7.5`    | box loss gain                                                               |
 | `cls`             | `0.5`    | cls loss gain (scale with pixels)                                           |
 | `dfl`             | `1.5`    | dfl loss gain                                                               |
+| `pose`            | `12.0`   | pose loss gain (pose-only)                                                  |
+| `kobj`            | `2.0`    | keypoint obj loss gain (pose-only)                                          |
 | `fl_gamma`        | `0.0`    | focal loss gamma (efficientDet default gamma=1.5)                           |
 | `label_smoothing` | `0.0`    | label smoothing (fraction)                                                  |
 | `nbs`             | `64`     | nominal batch size                                                          |

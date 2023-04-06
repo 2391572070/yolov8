@@ -16,10 +16,12 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 
 from ultralytics.yolo.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, RANK, __version__
 from ultralytics.yolo.utils.checks import check_version
 
+TORCHVISION_0_10 = check_version(torchvision.__version__, '0.10.0')
 TORCH_1_9 = check_version(torch.__version__, '1.9.0')
 TORCH_1_11 = check_version(torch.__version__, '1.11.0')
 TORCH_1_12 = check_version(torch.__version__, '1.12.0')
@@ -238,8 +240,8 @@ def copy_attr(a, b, include=(), exclude=()):
 
 
 def get_latest_opset():
-    # Return max supported ONNX opset by this version of torch
-    return max(int(k[14:]) for k in vars(torch.onnx) if 'symbolic_opset' in k)  # opset
+    # Return second-most (for maturity) recently supported ONNX opset by this version of torch
+    return max(int(k[14:]) for k in vars(torch.onnx) if 'symbolic_opset' in k) - 1  # opset
 
 
 def intersect_dicts(da, db, exclude=()):
@@ -316,18 +318,18 @@ def strip_optimizer(f: Union[str, Path] = 'best.pt', s: str = '') -> None:
     """
     Strip optimizer from 'f' to finalize training, optionally save as 's'.
 
-    Usage:
-        from ultralytics.yolo.utils.torch_utils import strip_optimizer
-        from pathlib import Path
-        for f in Path('/Users/glennjocher/Downloads/weights').glob('*.pt'):
-            strip_optimizer(f)
-
     Args:
         f (str): file path to model to strip the optimizer from. Default is 'best.pt'.
         s (str): file path to save the model with stripped optimizer to. If not provided, 'f' will be overwritten.
 
     Returns:
         None
+
+    Usage:
+        from pathlib import Path
+        from ultralytics.yolo.utils.torch_utils import strip_optimizer
+        for f in Path('/Users/glennjocher/Downloads/weights').rglob('*.pt'):
+            strip_optimizer(f)
     """
     x = torch.load(f, map_location=torch.device('cpu'))
     args = {**DEFAULT_CFG_DICT, **x['train_args']}  # combine model args with default args, preferring model args
@@ -347,7 +349,9 @@ def strip_optimizer(f: Union[str, Path] = 'best.pt', s: str = '') -> None:
 
 
 def profile(input, ops, n=10, device=None):
-    """ YOLOv8 speed/memory/FLOPs profiler
+    """
+    YOLOv8 speed/memory/FLOPs profiler
+
     Usage:
         input = torch.randn(16, 3, 640, 640)
         m1 = lambda x: x * torch.sigmoid(x)
