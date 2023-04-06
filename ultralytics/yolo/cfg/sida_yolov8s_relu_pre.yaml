@@ -1,34 +1,34 @@
-# Ultralytics YOLO , GPL-3.0 license
+# Ultralytics YOLO 🚀, GPL-3.0 license
 # Default training settings and hyperparameters for medium-augmentation COCO training
 
-task: detect  # inference task, i.e. detect, segment, classify
-mode: train  # YOLO mode, i.e. train, val, predict, export
+task: detect  # YOLO task, i.e. detect, segment, classify, pose
+mode: train  # YOLO mode, i.e. train, val, predict, export, track, benchmark
 
 # Train settings -------------------------------------------------------------------------------------------------------
 model:  "runs/detect/coco_yolov8s_relu_8gpu/weights/last.pt" # path to model file, i.e. yolov8n.pt, yolov8n.yaml
 data:  "ultralytics/datasets/sida.yaml" # path to data file, i.e. i.e. coco128.yaml
-project:  # project name
-name: "sida_yolov8s_relu_pre_8gpu" # experiment name
-pretrained: True  # whether to use a pretrained model
-close_mosaic: 10  # disable mosaic augmentation for final 10 epochs
 epochs: 50  # number of epochs to train for
 patience: 20  # epochs to wait for no observable improvement for early stopping of training
 batch: 128  # number of images per batch (-1 for AutoBatch)
-device: 1,2,3,4,5,6,7,8 # device to run on, i.e. cuda device=0 or device=0,1,2,3 or device=cpu
-workers: 32  # number of worker threads for data loading (per RANK if DDP)
 imgsz: 640  # size of input images as integer or w,h
 save: True  # save train checkpoints and predict results
 save_period: -1 # Save checkpoint every x epochs (disabled if < 1)
 cache: False  # True/ram, disk or False. Use cache for data loading
+device: 1,2,3,4,5,6,7,8 # device to run on, i.e. cuda device=0 or device=0,1,2,3 or device=cpu
+workers: 32  # number of worker threads for data loading (per RANK if DDP)
+project:  # project name
+name: "sida_yolov8s_relu_pre_8gpu" # experiment name, results saved to 'project/name' directory
 exist_ok: False  # whether to overwrite existing experiment
+pretrained: False  # whether to use a pretrained model
 optimizer: SGD  # optimizer to use, choices=['SGD', 'Adam', 'AdamW', 'RMSProp']
 verbose: True  # whether to print verbose output
 seed: 0  # random seed for reproducibility
 deterministic: True  # whether to enable deterministic mode
 single_cls: False  # train multi-class data as single-class
 image_weights: False  # use weighted image selection for training
-rect: False  # support rectangular training if mode='train', support rectangular evaluation if mode='val'
+rect: False  # rectangular training if mode='train' or rectangular validation if mode='val'
 cos_lr: False  # use cosine learning rate scheduler
+close_mosaic: 10  # disable mosaic augmentation for final 10 epochs
 resume: False  # resume training from last checkpoint
 amp: True  # Automatic Mixed Precision (AMP) training, choices=[True, False], True runs AMP check
 # Segmentation
@@ -55,8 +55,8 @@ show: False  # show results if possible
 save_txt: False  # save results as .txt file
 save_conf: False  # save results with confidence scores
 save_crop: False  # save cropped images with results
-hide_labels: False  # hide labels
-hide_conf: False  # hide confidence scores
+show_labels: True  # show object labels in plots
+show_conf: True  # show object confidence scores in plots
 vid_stride: 1  # video frame-rate stride
 line_thickness: 3  # bounding box thickness (pixels)
 visualize: False  # visualize model features
@@ -88,6 +88,8 @@ warmup_bias_lr: 0.1  # warmup initial bias lr
 box: 7.5  # box loss gain
 cls: 0.5  # cls loss gain (scale with pixels)
 dfl: 1.5  # dfl loss gain
+pose: 12.0  # pose loss gain
+kobj: 1.0  # keypoint obj loss gain
 fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
 label_smoothing: 0.0  # label smoothing (fraction)
 nbs: 64  # nominal batch size
