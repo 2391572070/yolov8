@@ -122,5 +122,5 @@ download: |
   out_file_path.parent.mkdir(parents=True, exist_ok=True)
   out_images_file = open(out_file_path, 'w', encoding='utf-8')
   for ann_file_path, image_dir in zip(yaml['val_anns'], yaml['val_image_dirs']):
-      gen_labels(names, dir, data_root, out_images_file, ann_file_path, image_dir, skip_crowd=True, skip_reflected=False, object_min_area=object_min_area, skips=None)
+      gen_labels(names, dir, data_root, out_images_file, ann_file_path, image_dir, skip_crowd=False, skip_reflected=False, object_min_area=None, skips=None)
   out_images_file.close()
