@@ -144,7 +144,8 @@ class DetectionValidator(BaseValidator):
                 LOGGER.info(pf % (self.names[c], self.seen, self.nt_per_class[c], *self.metrics.class_result(i)))
 
         if self.args.plots:
-            self.confusion_matrix.plot(save_dir=self.save_dir, names=list(self.names.values()))
+            for normalize in True, False:
+                self.confusion_matrix.plot(save_dir=self.save_dir, names=self.names.values(), normalize=normalize)
 
     def _process_batch(self, detections, labels):
         """
@@ -177,7 +178,7 @@ class DetectionValidator(BaseValidator):
         Args:
             img_path (str): Path to the folder containing images.
             mode (str): `train` mode or `val` mode, users are able to customize different augmentations for each mode.
-            batch_size (int, optional): Size of batches, this is for `rect`. Defaults to None.
+            batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
         gs = max(int(de_parallel(self.model).stride if self.model else 0), 32)
         return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, stride=gs)
