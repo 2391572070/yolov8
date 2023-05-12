@@ -5,7 +5,7 @@ task: detect  # YOLO task, i.e. detect, segment, classify, pose
 mode: train  # YOLO mode, i.e. train, val, predict, export, track, benchmark
 
 # Train settings -------------------------------------------------------------------------------------------------------
-model:  "runs/detect/coco_yolov5s_relu_4gpu/weights/last.pt" # path to model file, i.e. yolov8n.pt, yolov8n.yaml
+model:  "runs/detect/coco_yolov5s_relu_8gpu/weights/last.pt" # path to model file, i.e. yolov8n.pt, yolov8n.yaml
 data:  "ultralytics/datasets/sida.yaml" # path to data file, i.e. i.e. coco128.yaml
 epochs: 50  # number of epochs to train for
 patience: 20  # epochs to wait for no observable improvement for early stopping of training
