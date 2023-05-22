@@ -30,6 +30,8 @@ def parse_args():
     parser.add_argument("--ann_json_file", type=str, required=True, help='annotations json file')
     parser.add_argument("--classwise", action="store_true", help="Whether to evaluating the AP for each class")
     parser.add_argument("--label_offset", type=int, default=0, help='label offset')
+    parser.add_argument("--src_labels", default=None, help="Space separated value of the src labels", nargs='*', type=int)
+    parser.add_argument("--dst_labels", default=None, help="Space separated value of the dst labels", nargs='*', type=int)
     parser.add_argument('--image_dir', type=str, default=None, help='path to image directory')
     parser.add_argument("--display", action="store_true", help="display")
     parser.add_argument("--score_thr", type=float, default=0, help='display score thr')
@@ -50,11 +52,19 @@ def main():
     label_offset = args.label_offset
     bbox_size_unit = args.bbox_size_unit
 
+    label_map = None
+    if (args.src_labels is not None) and (args.dst_labels is not None):
+        if len(args.src_labels) != len(args.dst_labels):
+            print('len(args.src_labels) != len(args.dst_labels)')
+            return
+        label_map = {s: d for s, d in zip(args.src_labels, args.dst_labels)}
+    is_json = False
     pred_anns = []
     id_pred_anns = {}
     anno = None
     ext = os.path.splitext(args.bbox_list_file)[-1].lower()
     if ext == '.json':
+        is_json = True
         anno = COCO(args.ann_json_file)  # init annotations api
         base_ids = {}
         id_filenames = {}
@@ -68,12 +78,18 @@ def main():
             json_info = json.load(file)
             for info in json_info:
                 image_id = info['image_id']
-                image_id = base_ids.get(image_id, None)
+                image_id = base_ids.get(image_id, image_id)
                 if image_id is None:
                     continue
                 info['image_id'] = image_id
-                if 0 != label_offset:
-                    info['category_id'] += label_offset
+                if label_map is not None:
+                    label = label_map.get(info['category_id'], None)
+                    if label is None:
+                        continue
+                    info['category_id'] = label
+                else:
+                    if 0 != label_offset:
+                        info['category_id'] += label_offset
                 pred_anns.append(info)
                 _bbox_info = [info['category_id'], info['bbox'], info['score']]
                 _pred_anns = id_pred_anns.get(image_id, None)
@@ -139,7 +155,13 @@ def main():
                         score = float(bbox[5])
                         if score < score_thr:
                             continue
-                        label = int(bbox[0]) + label_offset
+                        label = int(bbox[0])
+                        if label_map is not None:
+                            label = label_map.get(label, None)
+                            if label is None:
+                                continue
+                        else:
+                            label += label_offset
                         x1, y1, x2, y2 = float(bbox[1]), float(bbox[2]), float(bbox[3]), float(bbox[4])
                         if 1 == bbox_size_unit:
                             x1, y1, x2, y2 = round(x1*width), round(y1*height), round(x2*width), round(y2*height)
@@ -154,7 +176,7 @@ def main():
                         break
         return
 
-    if len(pred_anns) < 1:
+    if (not is_json) and (len(pred_anns) < 1):
         file_bboxes = {}
         with open(args.bbox_list_file, 'r') as file:
             for line in file.readlines():
@@ -166,7 +188,14 @@ def main():
                 bboxes = []
                 for bbox in bbox_info:
                     bbox = bbox.split(',')
-                    bboxes.append([int(bbox[0])+label_offset, float(bbox[1]), float(bbox[2]), float(bbox[3]), float(bbox[4]), float(bbox[5])])
+                    label = int(bbox[0])
+                    if label_map is not None:
+                        label = label_map.get(label, None)
+                        if label is None:
+                            continue
+                    else:
+                        label += label_offset
+                    bboxes.append([label, float(bbox[1]), float(bbox[2]), float(bbox[3]), float(bbox[4]), float(bbox[5])])
                 if len(bboxes) > 0:
                     file_bboxes[file_name] = bboxes
 
