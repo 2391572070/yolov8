@@ -61,6 +61,50 @@ class Detect(nn.Module):
         y = torch.cat((dbox, cls.sigmoid()), 1)
         return y if self.export else (y, x)
 
+    def forward_export(self, x):
+        shape = x[0].shape  # BCHW
+        box_list = []
+        cls_list = []
+        for i in range(self.nl):
+            box = self.cv2[i](x[i])
+            cls = self.cv3[i](x[i])
+
+            x[i] = torch.cat((box, cls), 1)
+
+            box = box.view(shape[0], 4, self.reg_max, -1)
+            box = self.dfl(box)
+            cls = cls.sigmoid()
+            box = box.transpose(3, 2)
+            cls = cls.permute(0, 2, 3, 1)
+            box_list.append(box)
+            cls_list.append(cls)
+
+        # x_cat = torch.cat([xi.view(shape[0], self.no, -1) for xi in x], 2)
+        # if self.export and self.format in ('saved_model', 'pb', 'tflite', 'edgetpu', 'tfjs'):  # avoid TF FlexSplitV ops
+        #     box = x_cat[:, :self.reg_max * 4]
+        #     cls = x_cat[:, self.reg_max * 4:]
+        # else:
+        #     box, cls = x_cat.split((self.reg_max * 4, self.nc), 1)
+        #
+        # box = self.dfl(box)
+        # cls = cls.sigmoid()
+        #
+        # # _box = torch.cat(box_list, -1)
+        # # _cls = torch.cat([c.view(shape[0], self.nc, -1) for c in cls_list], -1)
+        # _box = torch.cat(box_list, -2)
+        # _cls = torch.cat([c.view(shape[0], -1, self.nc) for c in cls_list], -2)
+        # box = box.transpose(3, 2)
+        # cls = cls.transpose(2, 1)
+        #
+        # db = (box - _box).abs()
+        # dc = (cls - _cls).abs()
+        # sb = db.sum()
+        # sc = dc.sum()
+        # mb = db.max()
+        # mc = dc.max()
+
+        return *box_list, *cls_list
+
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""
         m = self  # self.model[-1]  # Detect() module

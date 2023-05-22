@@ -35,6 +35,14 @@ class DFL(nn.Module):
         return self.conv(x.view(b, 4, self.c1, a).transpose(2, 1).softmax(1)).view(b, 4, a)
         # return self.conv(x.view(b, self.c1, 4, a).softmax(1)).view(b, 4, a)
 
+    def forward_export(self, x):
+        if len(x.shape) == 4:
+            # return self.conv(x.transpose(2, 1).softmax(1))
+            return self.conv(x.transpose(3, 2).softmax(3).permute(0, 3, 1, 2))
+        else:
+            b, c, a = x.shape  # batch, channels, anchors
+            return self.conv(x.view(b, 4, self.c1, a).transpose(2, 1).softmax(1))
+
 
 class Proto(nn.Module):
     """YOLOv8 mask Proto module for segmentation models."""
