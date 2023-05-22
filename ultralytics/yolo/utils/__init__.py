@@ -8,7 +8,6 @@ import platform
 import re
 import subprocess
 import sys
-import tempfile
 import threading
 import urllib
 import uuid
@@ -243,13 +242,13 @@ if WINDOWS:  # emoji-safe logging
     LOGGER.addFilter(EmojiFilter())
 
 
-def yaml_save(file='data.yaml', data=None):
+def yaml_save(file='data.yaml', data={}):
     """
     Save YAML data to a file.
 
     Args:
         file (str, optional): File name. Default is 'data.yaml'.
-        data (dict, optional): Data to save in YAML format. Default is None.
+        data (dict): Data to save in YAML format.
 
     Returns:
         None: Data is saved to the specified file.
@@ -262,7 +261,7 @@ def yaml_save(file='data.yaml', data=None):
     # Convert Path objects to strings
     for k, v in data.items():
         if isinstance(v, Path):
-            dict[k] = str(v)
+            data[k] = str(v)
 
     # Dump data to file in YAML format
     with open(file, 'w') as f:
@@ -414,12 +413,7 @@ def is_dir_writeable(dir_path: Union[str, Path]) -> bool:
     Returns:
         bool: True if the directory is writeable, False otherwise.
     """
-    try:
-        with tempfile.TemporaryFile(dir=dir_path):
-            pass
-        return True
-    except OSError:
-        return False
+    return os.access(str(dir_path), os.W_OK)
 
 
 def is_pytest_running():
