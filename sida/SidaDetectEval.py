@@ -315,7 +315,7 @@ class SidaCOCOeval(COCOeval):
             nan = float('nan')
             max_f1 = 0
             max_str = None
-            iStr = 'IoU={:0.3f} Score={:0.3f} @ [ F1={:0.3f}, AP={:0.3f}, AR={:0.3f}, TP={}, FP={}, FN={}, DT={}, GT={} ]'
+            iStr = 'IoU={:0.3f} Score={:0.3f} @ [ F1={:0.3f}, AP={:0.3f}, AR={:0.3f}, TP={}, FP={}, FN={}, FP+FN={}, DT={}, GT={} ]'
             for a, scoreThr in enumerate(self.scoreThrs):
                 tp = _tpCount[a]
                 fp = _fpCount[a]
@@ -332,7 +332,7 @@ class SidaCOCOeval(COCOeval):
                     rc = nan
                 f1 = self.F1(pr, rc)
                 # f1 = self.Dist(pr, rc)
-                sumStr = iStr.format(iouThr, scoreThr, f1, pr, rc, tp, fp, fn, dt, gt)
+                sumStr = iStr.format(iouThr, scoreThr, f1, pr, rc, tp, fp, fn, fp+fn, dt, gt)
                 if max_f1 < f1:
                     max_f1 = f1
                     max_str = sumStr
@@ -363,7 +363,7 @@ class SidaCOCOeval(COCOeval):
                             rc = nan
                         f1 = self.F1(pr, rc)
                         # f1 = self.Dist(pr, rc)
-                        sumStr = iStr.format(iouThr, scoreThr, f1, pr, rc, tp, fp, fn, dt, gt)
+                        sumStr = iStr.format(iouThr, scoreThr, f1, pr, rc, tp, fp, fn, fp+fn, dt, gt)
                         if max_f1 < f1:
                             max_f1 = f1
                             max_str = sumStr
