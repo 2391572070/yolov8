@@ -206,8 +206,6 @@ class ClassificationDataset(torchvision.datasets.ImageFolder):
 
     Args:
         root (str): Dataset path.
-        transform (callable, optional): torchvision transforms, used by default.
-        album_transform (callable, optional): Albumentations transforms, used if installed.
 
     Attributes:
         cache_ram (bool): True if images should be cached in RAM, False otherwise.
@@ -225,9 +223,11 @@ class ClassificationDataset(torchvision.datasets.ImageFolder):
             root (str): Dataset path.
             args (Namespace): Argument parser containing dataset related settings.
             augment (bool, optional): True if dataset should be augmented, False otherwise. Defaults to False.
-            cache (Union[bool, str], optional): Cache setting, can be True, False, 'ram' or 'disk'. Defaults to False.
+            cache (bool | str | optional): Cache setting, can be True, False, 'ram' or 'disk'. Defaults to False.
         """
         super().__init__(root=root)
+        if augment and args.fraction < 1.0:  # reduce training fraction
+            self.samples = self.samples[:round(len(self.samples) * args.fraction)]
         self.cache_ram = cache is True or cache == 'ram'
         self.cache_disk = cache == 'disk'
         self.samples = [list(x) + [Path(x[0]).with_suffix('.npy'), None] for x in self.samples]  # file, index, npy, im
@@ -271,4 +271,4 @@ class SemanticDataset(BaseDataset):
 
     def __init__(self):
         """Initialize a SemanticDataset object."""
-        pass
+        super().__init__()

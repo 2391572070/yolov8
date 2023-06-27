@@ -62,14 +62,13 @@ class DetectionValidator(BaseValidator):
 
     def postprocess(self, preds):
         """Apply Non-maximum suppression to prediction outputs."""
-        preds = ops.non_max_suppression(preds,
-                                        self.args.conf,
-                                        self.args.iou,
-                                        labels=self.lb,
-                                        multi_label=True,
-                                        agnostic=self.args.single_cls,
-                                        max_det=self.args.max_det)
-        return preds
+        return ops.non_max_suppression(preds,
+                                       self.args.conf,
+                                       self.args.iou,
+                                       labels=self.lb,
+                                       multi_label=True,
+                                       agnostic=self.args.single_cls,
+                                       max_det=self.args.max_det)
 
     def update_metrics(self, preds, batch):
         """Metrics."""
@@ -224,7 +223,7 @@ class DetectionValidator(BaseValidator):
     def plot_predictions(self, batch, preds, ni):
         """Plots predicted bounding boxes on input images and saves the result."""
         plot_images(batch['img'],
-                    *output_to_target(preds, max_det=15),
+                    *output_to_target(preds, max_det=self.args.max_det),
                     paths=batch['im_file'],
                     fname=self.save_dir / f'val_batch{ni}_pred.jpg',
                     names=self.names,

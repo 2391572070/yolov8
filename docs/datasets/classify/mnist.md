@@ -1,6 +1,7 @@
 ---
 comments: true
 description: Learn about the MNIST dataset, a large database of handwritten digits commonly used for training various image processing systems and machine learning models.
+keywords: MNIST, EMNIST, dataset, handwritten digits, convolutional neural networks, support vector machines, machine learning, computer vision, image processing, benchmark data, Ultralytics
 ---
 
 # MNIST Dataset
@@ -51,7 +52,7 @@ To train a CNN model on the MNIST dataset for 100 epochs with an image size of 3
 
         ```bash
         # Start training from a pretrained *.pt model
-        cnn detect train data=MNIST.yaml model=cnn_mnist.pt epochs=100 imgsz=28
+        cnn detect train data=mnist model=yolov8n-cls.pt epochs=100 imgsz=28
         ```
 
 ## Sample Images and Annotations
@@ -70,11 +71,11 @@ research or development work, please cite the following paper:
 
 ```bibtex
 @article{lecun2010mnist,
-  title={MNIST handwritten digit database},
-  author={LeCun, Yann and Cortes, Corinna and Burges, CJ},
-  journal={ATT Labs [Online]. Available: http://yann.lecun.com/exdb/mnist},
-  volume={2},
-  year={2010}
+         title={MNIST handwritten digit database},
+         author={LeCun, Yann and Cortes, Corinna and Burges, CJ},
+         journal={ATT Labs [Online]. Available: http://yann.lecun.com/exdb/mnist},
+         volume={2},
+         year={2010}
 }
 ```
 

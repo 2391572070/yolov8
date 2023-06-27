@@ -64,6 +64,8 @@ def select_device(device='', batch=0, newline=False, verbose=True):
     if cpu or mps:
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # force torch.cuda.is_available() = False
     elif device:  # non-cpu device requested
+        if device == 'cuda':
+            device = '0'
         visible = os.environ.get('CUDA_VISIBLE_DEVICES', None)
         os.environ['CUDA_VISIBLE_DEVICES'] = device  # set environment variable - must be before assert is_available()
         if not (torch.cuda.is_available() and torch.cuda.device_count() >= len(device.replace(',', ''))):
@@ -162,8 +164,9 @@ def model_info(model, detailed=False, verbose=True, imgsz=640):
     """Model information. imgsz may be int or list, i.e. imgsz=640 or imgsz=[640, 320]."""
     if not verbose:
         return
-    n_p = get_num_params(model)
-    n_g = get_num_gradients(model)  # number gradients
+    n_p = get_num_params(model)  # number of parameters
+    n_g = get_num_gradients(model)  # number of gradients
+    n_l = len(list(model.modules()))  # number of layers
     if detailed:
         LOGGER.info(
             f"{'layer':>5} {'name':>40} {'gradient':>9} {'parameters':>12} {'shape':>20} {'mu':>10} {'sigma':>10}")
@@ -173,11 +176,12 @@ def model_info(model, detailed=False, verbose=True, imgsz=640):
                         (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std(), p.dtype))
 
     flops = get_flops(model, imgsz)
-    fused = ' (fused)' if model.is_fused() else ''
+    fused = ' (fused)' if getattr(model, 'is_fused', lambda: False)() else ''
     fs = f', {flops:.1f} GFLOPs' if flops else ''
-    m = Path(getattr(model, 'yaml_file', '') or model.yaml.get('yaml_file', '')).stem.replace('yolo', 'YOLO') or 'Model'
-    LOGGER.info(f'{m} summary{fused}: {len(list(model.modules()))} layers, {n_p} parameters, {n_g} gradients{fs}')
-    return n_p, flops
+    yaml_file = getattr(model, 'yaml_file', '') or getattr(model, 'yaml', {}).get('yaml_file', '')
+    model_name = Path(yaml_file).stem.replace('yolo', 'YOLO') or 'Model'
+    LOGGER.info(f'{model_name} summary{fused}: {n_l} layers, {n_p} parameters, {n_g} gradients{fs}')
+    return n_l, n_p, n_g, flops
 
 
 def get_num_params(model):
@@ -190,6 +194,29 @@ def get_num_gradients(model):
     return sum(x.numel() for x in model.parameters() if x.requires_grad)
 
 
+def model_info_for_loggers(trainer):
+    """
+    Return model info dict with useful model information.
+
+    Example for YOLOv8n:
+        {'model/parameters': 3151904,
+         'model/GFLOPs': 8.746,
+         'model/speed_ONNX(ms)': 41.244,
+         'model/speed_TensorRT(ms)': 3.211,
+         'model/speed_PyTorch(ms)': 18.755}
+    """
+    if trainer.args.profile:  # profile ONNX and TensorRT times
+        from ultralytics.yolo.utils.benchmarks import ProfileModels
+        results = ProfileModels([trainer.last], device=trainer.device).profile()[0]
+        results.pop('model/name')
+    else:  # only return PyTorch times from most recent validation
+        results = {
+            'model/parameters': get_num_params(trainer.model),
+            'model/GFLOPs': round(get_flops(trainer.model), 3)}
+    results['model/speed_PyTorch(ms)'] = round(trainer.validator.speed['inference'], 3)
+    return results
+
+
 def get_flops(model, imgsz=640):
     """Return a YOLO model's FLOPs."""
     try:
@@ -199,10 +226,23 @@ def get_flops(model, imgsz=640):
         im = torch.empty((1, p.shape[1], stride, stride), device=p.device)  # input image in BCHW format
         flops = thop.profile(deepcopy(model), inputs=[im], verbose=False)[0] / 1E9 * 2 if thop else 0  # stride GFLOPs
         imgsz = imgsz if isinstance(imgsz, list) else [imgsz, imgsz]  # expand if int/float
-        flops = flops * imgsz[0] / stride * imgsz[1] / stride  # 640x640 GFLOPs
-        return flops
+        return flops * imgsz[0] / stride * imgsz[1] / stride  # 640x640 GFLOPs
     except Exception:
         return 0
+
+
+def get_flops_with_torch_profiler(model, imgsz=640):
+    # Compute model FLOPs (thop alternative)
+    model = de_parallel(model)
+    p = next(model.parameters())
+    stride = (max(int(model.stride.max()), 32) if hasattr(model, 'stride') else 32) * 2  # max stride
+    im = torch.zeros((1, p.shape[1], stride, stride), device=p.device)  # input image in BCHW format
+    with torch.profiler.profile(with_flops=True) as prof:
+        model(im)
+    flops = sum(x.flops for x in prof.key_averages()) / 1E9
+    imgsz = imgsz if isinstance(imgsz, list) else [imgsz, imgsz]  # expand if int/float
+    flops = flops * imgsz[0] / stride * imgsz[1] / stride  # 640x640 GFLOPs
+    return flops
 
 
 def initialize_weights(model):
@@ -287,6 +327,9 @@ def init_seeds(seed=0, deterministic=False):
             os.environ['PYTHONHASHSEED'] = str(seed)
         else:
             LOGGER.warning('WARNING ⚠️ Upgrade to torch>=2.0.0 for deterministic training.')
+    else:
+        torch.use_deterministic_algorithms(False)
+        torch.backends.cudnn.deterministic = False
 
 
 class ModelEMA:
@@ -341,8 +384,14 @@ def strip_optimizer(f: Union[str, Path] = 'best.pt', s: str = '') -> None:
         for f in Path('/Users/glennjocher/Downloads/weights').rglob('*.pt'):
             strip_optimizer(f)
     """
+    # Use dill (if exists) to serialize the lambda functions where pickle does not do this
+    try:
+        import dill as pickle
+    except ImportError:
+        import pickle
+
     x = torch.load(f, map_location=torch.device('cpu'))
-    args = {**DEFAULT_CFG_DICT, **x['train_args']}  # combine model args with default args, preferring model args
+    args = {**DEFAULT_CFG_DICT, **x['train_args']} if 'train_args' in x else None  # combine args
     if x.get('ema'):
         x['model'] = x['ema']  # replace model with ema
     for k in 'optimizer', 'best_fitness', 'ema', 'updates':  # keys
@@ -353,7 +402,7 @@ def strip_optimizer(f: Union[str, Path] = 'best.pt', s: str = '') -> None:
         p.requires_grad = False
     x['train_args'] = {k: v for k, v in args.items() if k in DEFAULT_CFG_KEYS}  # strip non-default keys
     # x['model'].args = x['train_args']
-    torch.save(x, s or f)
+    torch.save(x, s or f, pickle_module=pickle)
     mb = os.path.getsize(s or f) / 1E6  # filesize
     LOGGER.info(f"Optimizer stripped from {f},{f' saved as {s},' if s else ''} {mb:.1f}MB")
 

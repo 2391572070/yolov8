@@ -1,6 +1,7 @@
 ---
 comments: true
 description: Experience the power of YOLOv5 and YOLOv8 models with Ultralytics HUB app. Download from Google Play and App Store now.
+keywords: Ultralytics, HUB, App, Mobile, Object Detection, Image Recognition, YOLOv5, YOLOv8, Hardware Acceleration, Custom Model Training, iOS, Android
 ---
 
 # Ultralytics HUB App
@@ -12,7 +13,7 @@ description: Experience the power of YOLOv5 and YOLOv8 models with Ultralytics H
   <a href="https://github.com/ultralytics" style="text-decoration:none;">
     <img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-github.png" width="2%" alt="" /></a>
   <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="2%" alt="" />
-  <a href="https://www.linkedin.com/company/ultralytics" style="text-decoration:none;">
+  <a href="https://www.linkedin.com/company/ultralytics/" style="text-decoration:none;">
     <img src="https://github.com/ultralytics/assets/raw/main/social/logo-social-linkedin.png" width="2%" alt="" /></a>
   <img src="https://github.com/ultralytics/assets/raw/main/social/logo-transparent.png" width="2%" alt="" />
   <a href="https://twitter.com/ultralytics" style="text-decoration:none;">

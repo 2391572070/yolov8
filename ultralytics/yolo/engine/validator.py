@@ -126,7 +126,7 @@ class BaseValidator:
             if isinstance(self.args.data, str) and self.args.data.endswith('.yaml'):
                 self.data = check_det_dataset(self.args.data)
             elif self.args.task == 'classify':
-                self.data = check_cls_dataset(self.args.data)
+                self.data = check_cls_dataset(self.args.data, split=self.args.split)
             else:
                 raise FileNotFoundError(emojis(f"Dataset '{self.args.data}' for task={self.args.task} not found ❌"))
 
@@ -157,12 +157,12 @@ class BaseValidator:
 
             # Inference
             with dt[1]:
-                preds = model(batch['img'])
+                preds = model(batch['img'], augment=self.args.augment)
 
             # Loss
             with dt[2]:
                 if self.training:
-                    self.loss += trainer.criterion(preds, batch)[1]
+                    self.loss += model.loss(batch, preds)[1]
 
             # Postprocess
             with dt[3]:

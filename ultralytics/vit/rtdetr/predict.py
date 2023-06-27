@@ -12,14 +12,16 @@ class RTDETRPredictor(BasePredictor):
 
     def postprocess(self, preds, img, orig_imgs):
         """Postprocess predictions and returns a list of Results objects."""
-        bboxes, scores = preds[:2]  # (1, bs, 300, 4), (1, bs, 300, nc)
-        bboxes, scores = bboxes.squeeze_(0), scores.squeeze_(0)
+        nd = preds[0].shape[-1]
+        bboxes, scores = preds[0].split((4, nd - 4), dim=-1)
         results = []
         for i, bbox in enumerate(bboxes):  # (300, 4)
             bbox = ops.xywh2xyxy(bbox)
-            score, cls = scores[i].max(-1)  # (300, )
-            idx = score > self.args.conf
-            pred = torch.cat([bbox, score[..., None], cls[..., None]], dim=-1)[idx]  # filter
+            score, cls = scores[i].max(-1, keepdim=True)  # (300, 1)
+            idx = score.squeeze(-1) > self.args.conf  # (300, )
+            if self.args.classes is not None:
+                idx = (cls == torch.tensor(self.args.classes, device=cls.device)).any(1) & idx
+            pred = torch.cat([bbox, score, cls], dim=-1)[idx]  # filter
             orig_img = orig_imgs[i] if isinstance(orig_imgs, list) else orig_imgs
             oh, ow = orig_img.shape[:2]
             if not isinstance(orig_imgs, torch.Tensor):
