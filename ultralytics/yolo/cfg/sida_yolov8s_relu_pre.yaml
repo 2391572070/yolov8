@@ -118,3 +118,5 @@ tracker: botsort.yaml  # (str) tracker type, choices=[botsort.yaml, bytetrack.ya
 
 # Sida settings --------------------------------------------------------------------------------------------------------
 sida_deploy: False
+rm_transpose: False
+cpu_dfl: False

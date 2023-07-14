@@ -178,6 +178,9 @@ class Exporter:
             file = Path(file.name)
 
         sida_deploy = getattr(self.args, 'sida_deploy', False)
+        if sida_deploy:
+            rm_transpose = getattr(self.args, 'rm_transpose', False)
+            cpu_dfl = getattr(self.args, 'cpu_dfl', False)
 
         # Update model
         model = deepcopy(model).to(self.device)
@@ -191,6 +194,9 @@ class Exporter:
                 forward_export = getattr(m, 'forward_export', None)
                 if forward_export is not None:
                     m.forward = m.forward_export
+                    m.rm_transpose = rm_transpose
+                    if isinstance(m, Detect):
+                        m.cpu_dfl = cpu_dfl
             if isinstance(m, (Detect, Segment)):
                 m.dynamic = self.args.dynamic
                 m.export = True

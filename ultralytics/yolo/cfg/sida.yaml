@@ -48,3 +48,5 @@ copy_paste: 0.0  # (float) segment copy-paste (probability)
 
 # Sida settings --------------------------------------------------------------------------------------------------------
 sida_deploy: False
+rm_transpose: False
+cpu_dfl: False

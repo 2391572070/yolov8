@@ -29,6 +29,8 @@ class Detect(nn.Module):
 
     def __init__(self, nc=80, ch=()):  # detection layer
         super().__init__()
+        self.rm_transpose = False
+        self.cpu_dfl = False
         self.nc = nc  # number of classes
         self.nl = len(ch)  # number of detection layers
         self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
@@ -71,11 +73,13 @@ class Detect(nn.Module):
 
             x[i] = torch.cat((box, cls), 1)
 
-            box = box.view(shape[0], 4, self.reg_max, -1)
-            box = self.dfl(box)
-            cls = cls.sigmoid()
-            box = box.transpose(3, 2)
-            cls = cls.permute(0, 2, 3, 1)
+            if not self.cpu_dfl:
+                box = self.dfl(box)
+            cls.sigmoid_()
+            # rm transpose
+            if not self.rm_transpose:
+                box = box.transpose(3, 2)
+                cls = cls.permute(0, 2, 3, 1)
             box_list.append(box)
             cls_list.append(cls)
 
