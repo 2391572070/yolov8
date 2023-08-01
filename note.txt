@@ -105,3 +105,7 @@ yolo task=detect mode=train data=data=ultralytics/datasets/coco_v8.yaml cfg=ultr
 
 yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu.yaml data=ultralytics/datasets/sida_v1.yaml name=sida_yolov5s_relu_8gpu_v1
 yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu_pre.yaml data=ultralytics/datasets/sida_v1.yaml name=sida_yolov5s_relu_pre_8gpu_v1
+
+
+yolo task=detect mode=train data=data=ultralytics/datasets/coco_v8.yaml cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml model=ultralytics/models/v5/yolov5s_relu_sida.yaml name=coco_yolov5s_relu_sida_8gpu
+yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu_pre.yaml model=runs/detect/coco_yolov5s_relu_sida_8gpu/weights/last.pt

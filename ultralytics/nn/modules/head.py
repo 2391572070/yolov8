@@ -11,12 +11,12 @@ from torch.nn.init import constant_, xavier_uniform_
 
 from ultralytics.yolo.utils.tal import dist2bbox, make_anchors
 
-from .block import DFL, Proto
+from .block import DFL, SidaDFL, Proto
 from .conv import Conv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init_
 
-__all__ = 'Detect', 'Segment', 'Pose', 'Classify', 'RTDETRDecoder'
+__all__ = 'Detect', 'SidaDetect', 'Segment', 'Pose', 'Classify', 'RTDETRDecoder'
 
 
 class Detect(nn.Module):
@@ -117,6 +117,13 @@ class Detect(nn.Module):
         for a, b, s in zip(m.cv2, m.cv3, m.stride):  # from
             a[-1].bias.data[:] = 1.0  # box
             b[-1].bias.data[:m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+
+
+class SidaDetect(Detect):
+
+    def __init__(self, nc=80, ch=()):  # detection layer
+        super().__init__(nc, ch)
+        self.dfl = SidaDFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
 
 class Segment(Detect):
