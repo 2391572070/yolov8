@@ -55,12 +55,13 @@ def parse_args():
     parser.add_argument("--pause", action='store_true', help="pause display detect results")
     parser.add_argument('--seq_width', type=int, default=28, help='seq width')
     parser.add_argument('--seq_height', type=int, default=28, help='seq height')
+    parser.add_argument("--bbox_size_unit", default=0, help="0 is pixel unit, 1 is 0~1", type=int)
     args = parser.parse_args()
     return args
 
 
 args = parse_args()
-
+bbox_size_unit = args.bbox_size_unit
 random.seed(12345)
 
 
@@ -199,10 +200,18 @@ def detect_run(file_queue, out_queue, pid, args):
                                             multi_label=self.multi_label, max_det=self.max_det, classes=self.classes)
             shape = images.shape[2:]
             results = []
-            for pred, orig_w_h in zip(preds, orig_w_hs):
-                orig_shape = [orig_w_h[1], orig_w_h[0]]
-                pred[:, :4] = ops.scale_boxes(shape, pred[:, :4], orig_shape).round()
-                results.append(pred)
+            if 0 == bbox_size_unit:
+                for pred, orig_w_h in zip(preds, orig_w_hs):
+                    orig_shape = [orig_w_h[1], orig_w_h[0]]
+                    pred[:, :4] = ops.scale_boxes(shape, pred[:, :4], orig_shape).round()
+                    results.append(pred)
+            else:
+                sw = 1 / iw
+                sh = 1 / ih
+                for pred in preds:
+                    pred[:, [0, 2]] *= sw
+                    pred[:, [1, 3]] *= sh
+                    results.append(pred)
             if self.save_feat:
                 return results, pred_feats, feat_shapes
             else:
@@ -383,10 +392,16 @@ def out_run(out_queue, args, out_file_path, total_file_count):
                     for filename, _bboxes in zip(filenames, bboxes):
                         if len(_bboxes) > 0:
                             bbox_strs = []
-                            for bbox in _bboxes:
-                                # label,x1,y1,x2,y2,score
-                                bbox_str = '{},{},{},{},{},{:.4f}'.format(int(bbox[5]), int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), bbox[4])
-                                bbox_strs.append(bbox_str)
+                            if 0 == bbox_size_unit:
+                                for bbox in _bboxes:
+                                    # label,x1,y1,x2,y2,score
+                                    bbox_str = '{},{},{},{},{},{:.4f}'.format(int(bbox[5]), int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3]), bbox[4])
+                                    bbox_strs.append(bbox_str)
+                            else:
+                                for bbox in _bboxes:
+                                    # label,x1,y1,x2,y2,score
+                                    bbox_str = '{},{:.6f},{:.6f},{:.6f},{:.6f},{:.4f}'.format(int(bbox[5]), bbox[0], bbox[1], bbox[2], bbox[3], bbox[4])
+                                    bbox_strs.append(bbox_str)
                             out_info = '{} {}\n'.format(filename, ';'.join(bbox_strs))
                         else:
                             out_info = '{}\n'.format(filename)
