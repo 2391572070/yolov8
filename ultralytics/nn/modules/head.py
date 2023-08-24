@@ -31,6 +31,7 @@ class Detect(nn.Module):
         super().__init__()
         self.rm_transpose = False
         self.cpu_dfl = False
+        self.cpu_sigmoid = False
         self.nc = nc  # number of classes
         self.nl = len(ch)  # number of detection layers
         self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
@@ -75,7 +76,8 @@ class Detect(nn.Module):
 
             if not self.cpu_dfl:
                 box = self.dfl(box)
-            cls.sigmoid_()
+            if not self.cpu_sigmoid:
+                cls.sigmoid_()
             # rm transpose
             if not self.rm_transpose:
                 box = box.transpose(3, 2)

@@ -50,3 +50,4 @@ copy_paste: 0.0  # (float) segment copy-paste (probability)
 sida_deploy: False
 rm_transpose: False
 cpu_dfl: False
+cpu_sigmoid: False

@@ -181,6 +181,7 @@ class Exporter:
         if sida_deploy:
             rm_transpose = getattr(self.args, 'rm_transpose', False)
             cpu_dfl = getattr(self.args, 'cpu_dfl', False)
+            cpu_sigmoid = getattr(self.args, 'cpu_sigmoid', False)
 
         # Update model
         model = deepcopy(model).to(self.device)
@@ -197,6 +198,7 @@ class Exporter:
                     m.rm_transpose = rm_transpose
                     if isinstance(m, (Detect, SidaDetect)):
                         m.cpu_dfl = cpu_dfl
+                        m.cpu_sigmoid = cpu_sigmoid
             if isinstance(m, (Detect, SidaDetect, Segment)):
                 m.dynamic = self.args.dynamic
                 m.export = True

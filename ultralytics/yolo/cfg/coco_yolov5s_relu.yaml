@@ -120,3 +120,4 @@ tracker: botsort.yaml  # (str) tracker type, choices=[botsort.yaml, bytetrack.ya
 sida_deploy: False
 rm_transpose: False
 cpu_dfl: False
+cpu_sigmoid: False
