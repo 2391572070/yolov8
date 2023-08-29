@@ -3,71 +3,71 @@ sync && echo 3 > /proc/sys/vm/drop_caches
 python: No module named torch.distributed.run
 将torch.distributed.run 换成 torch.distributed.launch 即可
 
-yolo task=detect mode=train model=ultralytics/models/v8/yolov8s.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov8s_8gpu batch=128 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4,5,6,7,8\' amp=False
+yolo task=detect mode=train model=ultralytics/cfg/models/v8/yolov8s.yaml data=ultralytics/data/datasets/coco_v8.yaml name=yolov8s_8gpu batch=128 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4,5,6,7,8\' amp=False
 
-yolo task=detect mode=train model=ultralytics/models/v8/yolov8s.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov8s_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\' amp=False
+yolo task=detect mode=train model=ultralytics/cfg/models/v8/yolov8s.yaml data=ultralytics/data/datasets/coco_v8.yaml name=yolov8s_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\' amp=False
 
-yolo task=detect mode=train model=ultralytics/models/v5/yolov5s_5x5.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov5s_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\' amp=False
+yolo task=detect mode=train model=ultralytics/cfg/models/v5/yolov5s_5x5.yaml data=ultralytics/data/datasets/coco_v8.yaml name=yolov5s_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\' amp=False
 
-yolo task=detect mode=train model=ultralytics/models/v5/yolov5s_relu.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov5s_relu_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\' amp=False
+yolo task=detect mode=train model=ultralytics/cfg/models/v5/yolov5s_relu.yaml data=ultralytics/data/datasets/coco_v8.yaml name=yolov5s_relu_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False optimizer=SGD device=\'1,2,3,4\' amp=False
 
-yolo task=detect mode=train model=ultralytics/models/v5/yolov5s_relu.yaml data=ultralytics/yolo/data/datasets/coco_v8.yaml name=yolov5s_relu_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False resume=True optimizer=SGD device=\'1,2,3,4\' amp=False
-
-
-yolo task=detect mode=train model=ultralytics/models/v8/yolov8m.yaml data=ultralytics/datasets/sida.yaml cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False resume=False optimizer=SGD device=\'1,2,3,4\' amp=False
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 optimizer=SGD device=\'1,2,3,4\' amp=False
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 optimizer=SGD amp=False
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8m_sida_4gpu amp=False
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8m.yaml data=ultralytics/datasets/sida.yaml amp=False
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s.yaml data=ultralytics/datasets/sida.yaml amp=False
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida.yaml name=yolov8s_sida_8gpu amp=False
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8m.yaml amp=False
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8m_pre.yaml amp=False
-
-yolo task=detect mode=val name=sida_yolov8m_8gpu_val model=runs/detect/sida_yolov8m_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-yolo task=detect mode=val name=sida_yolov8m_pre_8gpu_val model=runs/detect/sida_yolov8m_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s.yaml amp=False
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s_pre.yaml amp=False
-
-yolo task=detect mode=val name=sida_yolov8s_8gpu_val model=runs/detect/sida_yolov8s_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-yolo task=detect mode=val name=sida_yolov8s_pre_8gpu_val model=runs/detect/sida_yolov8s_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu.yaml amp=False
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu_pre.yaml amp=True
-
-yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-
-yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml conf=0.1 iou=0.5 max_det=100
-yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml conf=0.1 iou=0.5 max_det=100
-
-yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida_objects365.yaml
-yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida_objects365.yaml
-
-yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100
-yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100
-
-yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100 save_json=True
-yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100 save_json=True
-
-yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s_relu.yaml amp=False
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov8s_relu_pre.yaml amp=False
-
-yolo task=detect mode=val name=sida_yolov8s_relu_8gpu_val model=runs/detect/sida_yolov8s_relu_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
-yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_val model=runs/detect/sida_yolov8s_relu_pre_8gpu/weights/last.pt data=ultralytics/datasets/sida.yaml
+yolo task=detect mode=train model=ultralytics/cfg/models/v5/yolov5s_relu.yaml data=ultralytics/data/datasets/coco_v8.yaml name=yolov5s_relu_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False resume=True optimizer=SGD device=\'1,2,3,4\' amp=False
 
 
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml amp=False
+yolo task=detect mode=train model=ultralytics/cfg/models/v8/yolov8m.yaml data=ultralytics/cfg/datasets/sida.yaml cfg=ultralytics/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 pretrained=False resume=False optimizer=SGD device=\'1,2,3,4\' amp=False
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 optimizer=SGD device=\'1,2,3,4\' amp=False
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida.yaml name=yolov8m_sida_4gpu batch=64 workers=32 epochs=100 imgsz=640 optimizer=SGD amp=False
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida.yaml name=yolov8m_sida_4gpu amp=False
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8m.yaml data=ultralytics/cfg/datasets/sida.yaml amp=False
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8s.yaml data=ultralytics/cfg/datasets/sida.yaml amp=False
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida.yaml name=yolov8s_sida_8gpu amp=False
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8m.yaml amp=False
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8m_pre.yaml amp=False
+
+yolo task=detect mode=val name=sida_yolov8m_8gpu_val model=runs/detect/sida_yolov8m_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov8m_pre_8gpu_val model=runs/detect/sida_yolov8m_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8s.yaml amp=False
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8s_pre.yaml amp=False
+
+yolo task=detect mode=val name=sida_yolov8s_8gpu_val model=runs/detect/sida_yolov8s_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov8s_pre_8gpu_val model=runs/detect/sida_yolov8s_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu.yaml amp=False
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml amp=True
+
+yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+
+yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml conf=0.1 iou=0.5 max_det=100
+yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml conf=0.1 iou=0.5 max_det=100
+
+yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml
+yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml
+
+yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100
+yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100
+
+yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100 save_json=True
+yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml conf=0.1 iou=0.5 max_det=100 save_json=True
+
+yolo task=detect mode=val name=sida_yolov5s_relu_8gpu_val model=runs/detect/sida_yolov5s_relu_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov5s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8s_relu.yaml amp=False
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov8s_relu_pre.yaml amp=False
+
+yolo task=detect mode=val name=sida_yolov8s_relu_8gpu_val model=runs/detect/sida_yolov8s_relu_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_val model=runs/detect/sida_yolov8s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida.yaml
+
+
+yolo task=detect mode=train cfg=ultralytics/cfg/coco_yolov5s_relu.yaml amp=False
 
 
 yolo task=detect mode=predict show=True name=sida_yolov8s_pre_8gpu_video model=runs/detect/sida_yolov8s_pre_8gpu/weights/last.pt source=/media/kasim/DataSet/ElevatorRecord/alarm/alarm_video/MOTO_ENTER_ALARM/290b1000010a05000008393443595350/video1/20221115/20221115_145153_10a0500000839344.mp4
@@ -99,13 +99,13 @@ runs/detect/sida_yolov8m_pre_8gpu/weights/last.pt
 --save_txt
 
 
-yolo task=detect mode=train data=data=ultralytics/datasets/coco_v8.yaml cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml name=coco_yolov5s_relu_8gpu amp=False
+yolo task=detect mode=train data=data=ultralytics/cfg/datasets/coco_v8.yaml cfg=ultralytics/cfg/coco_yolov5s_relu.yaml name=coco_yolov5s_relu_8gpu amp=False
 
-yolo task=detect mode=train data=data=ultralytics/datasets/coco_v8.yaml cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml name=coco_yolov5s_relu_4gpu batch=64 device=\'1,2,3,4\' amp=False
+yolo task=detect mode=train data=data=ultralytics/cfg/datasets/coco_v8.yaml cfg=ultralytics/cfg/coco_yolov5s_relu.yaml name=coco_yolov5s_relu_4gpu batch=64 device=\'1,2,3,4\' amp=False
 
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu.yaml data=ultralytics/datasets/sida_v1.yaml name=sida_yolov5s_relu_8gpu_v1
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu_pre.yaml data=ultralytics/datasets/sida_v1.yaml name=sida_yolov5s_relu_pre_8gpu_v1
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu.yaml data=ultralytics/cfg/datasets/sida_v1.yaml name=sida_yolov5s_relu_8gpu_v1
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml data=ultralytics/cfg/datasets/sida_v1.yaml name=sida_yolov5s_relu_pre_8gpu_v1
 
 
-yolo task=detect mode=train data=ultralytics/datasets/coco_v8.yaml cfg=ultralytics/yolo/cfg/coco_yolov5s_relu.yaml model=ultralytics/models/v5/yolov5s_relu_sida.yaml name=coco_yolov5s_relu_sida_8gpu
-yolo task=detect mode=train cfg=ultralytics/yolo/cfg/sida_yolov5s_relu_pre.yaml model=runs/detect/coco_yolov5s_relu_sida_8gpu/weights/last.pt
+yolo task=detect mode=train data=ultralytics/cfg/datasets/coco_v8.yaml cfg=ultralytics/cfg/coco_yolov5s_relu.yaml model=ultralytics/cfg/models/v5/yolov5s_relu_sida.yaml name=coco_yolov5s_relu_sida_8gpu
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml model=runs/detect/coco_yolov5s_relu_sida_8gpu/weights/last.pt
