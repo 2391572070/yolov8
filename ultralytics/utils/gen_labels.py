@@ -2,8 +2,8 @@ from tqdm import tqdm
 import os
 import numpy as np
 from pathlib import Path
-from ultralytics.yolo.utils.checks import check_requirements
-from ultralytics.yolo.utils.ops import xyxy2xywhn
+from ultralytics.utils.checks import check_requirements
+from ultralytics.utils.ops import xyxy2xywhn
 check_requirements(('pycocotools>=2.0',))
 from pycocotools.coco import COCO
 

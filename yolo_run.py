@@ -1,3 +1,3 @@
-from ultralytics.yolo.cfg import entrypoint
+from ultralytics.cfg import entrypoint
 
 entrypoint(False)

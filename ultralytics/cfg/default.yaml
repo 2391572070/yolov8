@@ -1,8 +1,8 @@
-# Ultralytics YOLO 🚀, GPL-3.0 license
+# Ultralytics YOLO 🚀, AGPL-3.0 license
 # Default training settings and hyperparameters for medium-augmentation COCO training
 
-task: detect  # YOLO task, i.e. detect, segment, classify, pose
-mode: train  # YOLO mode, i.e. train, val, predict, export, track, benchmark
+task: detect  # (str) YOLO task, i.e. detect, segment, classify, pose
+mode: train  # (str) YOLO mode, i.e. train, val, predict, export, track, benchmark
 
 # Train settings -------------------------------------------------------------------------------------------------------
 model:  # (str, optional) path to model file, i.e. yolov8n.pt, yolov8n.yaml

@@ -193,9 +193,9 @@ def video_detect_run(file_queue, out_queue, pid, args):
     import torch.backends.cudnn as cudnn
 
     from ultralytics.nn.autobackend import AutoBackend
-    from ultralytics.yolo.utils import ops
-    from ultralytics.yolo.utils.checks import check_imgsz
-    from ultralytics.yolo.utils.torch_utils import select_device
+    from ultralytics.utils import ops
+    from ultralytics.utils.checks import check_imgsz
+    from ultralytics.utils.torch_utils import select_device
 
     class Detection:
         def __init__(self, config, checkpoint=None, device='0'):
@@ -289,7 +289,7 @@ def video_detect_run(file_queue, out_queue, pid, args):
 def video_image_run(file_queue, out_queue, pid, args):
     try:
 
-        from ultralytics.yolo.data.augment import LetterBox
+        from ultralytics.data.augment import LetterBox
 
         class DetectTransform:
 
@@ -728,7 +728,7 @@ class Padding:
         self.img_transform = None
 
         self._cal_padding = _CalPadding(self.imgsz, config.auto, stride=config.stride)
-        from ultralytics.yolo.data.augment import LetterBox
+        from ultralytics.data.augment import LetterBox
         self._letter_box = LetterBox(self.imgsz, config.auto, stride=config.stride)
 
     def cal_padding(self, width, height):
@@ -739,7 +739,7 @@ class Padding:
 
 
 def video_detect_display(args):
-    from ultralytics.yolo.utils.plotting import Colors
+    from ultralytics.utils.plotting import Colors
 
     opacity = 0.5
 
