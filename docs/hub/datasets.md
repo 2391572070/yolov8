@@ -1,7 +1,7 @@
 ---
 comments: true
-description: Efficiently manage and use custom datasets on Ultralytics HUB for streamlined training with YOLOv5 and YOLOv8 models.
-keywords: Ultralytics, HUB, Datasets, Upload, Visualize, Train, Custom Data, YAML, YOLOv5, YOLOv8
+description: Learn how Ultralytics HUB datasets streamline your ML workflow. Upload, format, validate, access, share, edit or delete datasets for Ultralytics YOLO model training.
+keywords: Ultralytics, HUB datasets, YOLO model training, upload datasets, dataset validation, ML workflow, share datasets
 ---
 
 # HUB Datasets
@@ -23,7 +23,7 @@ For example, if your dataset is called "coco8", as our [COCO8](https://docs.ultr
 zip -r coco8.zip coco8
 ```
 
-You can download our [COCO8](https://github.com/ultralytics/hub/blob/master/example_datasets/coco8.zip) example dataset and unzip it to see exactly how to structure your dataset.
+You can download our [COCO8](https://github.com/ultralytics/hub/blob/main/example_datasets/coco8.zip) example dataset and unzip it to see exactly how to structure your dataset.
 
 <p align="center">
   <img  src="https://raw.githubusercontent.com/ultralytics/assets/main/docs/hub/datasets/hub_upload_dataset_1.jpg" alt="COCO8 Dataset Structure" width="80%" />
@@ -34,7 +34,7 @@ The dataset YAML is the same standard YOLOv5 and YOLOv8 YAML format.
 !!! example "coco8.yaml"
 
     ```yaml
-    --8<-- "ultralytics/datasets/coco8.yaml"
+    --8<-- "ultralytics/cfg/datasets/coco8.yaml"
     ```
 
 After zipping your dataset, you should validate it before uploading it to Ultralytics HUB. Ultralytics HUB conducts the dataset validation check post-upload, so by ensuring your dataset is correctly formatted and error-free ahead of time, you can forestall any setbacks due to dataset rejection.
