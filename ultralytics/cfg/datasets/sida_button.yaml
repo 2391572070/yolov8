@@ -1,0 +1,83 @@
+# Ultralytics YOLO 🚀, AGPL-3.0 license
+# COCO 2017 dataset http://cocodataset.org by Microsoft
+# Example usage: yolo train data=coco.yaml
+# parent
+# ├── yolov8
+# └── datasets
+#     └── sida_button
+
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: ../datasets/sida_button  # dataset root dir
+train: train_sida_button.txt  # train images (relative to 'path')
+val: val_sida_button.txt  # val images (relative to 'path')
+test:  # test images (optional)
+
+data_root: '/root/data'
+train_anns: [
+  'ElevatorButton/train.txt',
+]
+train_image_dirs: [
+  'ElevatorButton',
+]
+val_anns: [
+  'ElevatorButton/val.txt',
+]
+val_image_dirs: [
+  'ElevatorButton',
+]
+background_image_list_files: [
+]
+background_image_dirs: [
+]
+
+nc: 2
+# Classes
+names:
+  0: on
+  1: occ
+
+
+object_min_area: {
+  'on': 4, 'occ': 4
+}
+label_use_object_min_area_filter: False
+
+
+# Download script/URL (optional)
+download: |
+  import os
+  from pathlib import Path
+  from ultralytics.utils.gen_labels import gen_labels, gen_backgrouds
+
+  # Make Directories
+  dir = Path(yaml['path'])  # dataset root dir)
+
+  data_root = Path(yaml['data_root'])
+  names = yaml['names']
+  if yaml.get('label_use_object_min_area_filter', False):
+      object_min_area = yaml.get('object_min_area', None)
+  else:
+      object_min_area = None
+  images_dir = dir / 'images'
+  labels_dir = dir / 'labels'
+
+  labels_dir.mkdir(parents=True, exist_ok=True)
+  if not os.path.exists(images_dir):
+      os.symlink(data_root, images_dir)
+
+  out_file_path = Path(yaml['train'])
+  out_file_path.parent.mkdir(parents=True, exist_ok=True)
+  out_images_file = open(out_file_path, 'w', encoding='utf-8')
+  for ann_file_path, image_dir in zip(yaml['train_anns'], yaml['train_image_dirs']):
+      gen_labels(names, dir, data_root, out_images_file, ann_file_path, image_dir, skip_crowd=True, skip_reflected=False, object_min_area=object_min_area, skips=None)
+  for ann_file_path, image_dir in zip(yaml['background_image_list_files'], yaml['background_image_dirs']):
+      gen_backgrouds(names, dir, data_root, out_images_file, ann_file_path, image_dir)
+  out_images_file.close()
+  
+  out_file_path = Path(yaml['val'])
+  out_file_path.parent.mkdir(parents=True, exist_ok=True)
+  out_images_file = open(out_file_path, 'w', encoding='utf-8')
+  for ann_file_path, image_dir in zip(yaml['val_anns'], yaml['val_image_dirs']):
+      gen_labels(names, dir, data_root, out_images_file, ann_file_path, image_dir, skip_crowd=False, skip_reflected=False, object_min_area=None, skips=None)
+  out_images_file.close()
