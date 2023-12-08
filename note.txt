@@ -108,4 +108,8 @@ yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml data=
 
 
 yolo task=detect mode=train data=ultralytics/cfg/datasets/coco_v8.yaml cfg=ultralytics/cfg/coco_yolov5s_relu.yaml model=ultralytics/cfg/models/v5/yolov5s_relu_sida.yaml name=coco_yolov5s_relu_sida_8gpu
-yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml model=runs/detect/coco_yolov5s_relu_sida_8gpu/weights/last.pt
+# SidaDetect(NPU) lower mAP
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml model=runs/detect/coco_yolov5s_relu_sida_8gpu/weights/last.pt x
+
+# OK
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml name=sida_yolov5s_relu_pre_8gpu_v2
