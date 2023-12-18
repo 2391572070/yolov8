@@ -665,6 +665,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             LOGGER.warning(f"WARNING ⚠️ no model scale passed. Assuming scale='{scale}'.")
         depth, width, max_channels = scales[scale]
 
+    if act is None:
+        act = d.get('act', None)
     if act:
         Conv.default_act = eval(act)  # redefine default activation, i.e. Conv.default_act = nn.SiLU()
         if verbose:

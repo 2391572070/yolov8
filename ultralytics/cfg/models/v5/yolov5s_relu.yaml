@@ -10,7 +10,7 @@ scales: # model compound scaling constants, i.e. 'model=yolov5n.yaml' will call 
   m: [0.67, 0.75, 1024]
   l: [1.00, 1.00, 1024]
   x: [1.33, 1.25, 1024]
-act: nn.ReLU()
+activation: nn.ReLU()
 
 # YOLOv5 v6.0 backbone
 backbone:
