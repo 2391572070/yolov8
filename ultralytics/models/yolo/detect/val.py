@@ -86,11 +86,12 @@ class DetectionValidator(BaseValidator):
                                        agnostic=self.args.single_cls,
                                        max_det=self.args.max_det)
 
-    def update_metrics(self, preds, batch):
+    def update_metrics(self, preds, batch, cls_start):
         """Metrics."""
         for si, pred in enumerate(preds):
             idx = batch['batch_idx'] == si
-            cls = batch['cls'][idx]
+            cls = cls_start + batch['cls'][idx]
+            pred[:, 5] = cls_start + pred[:, 5]
             bbox = batch['bboxes'][idx]
             nl, npr = cls.shape[0], pred.shape[0]  # number of labels, predictions
             shape = batch['ori_shape'][si]
@@ -197,21 +198,21 @@ class DetectionValidator(BaseValidator):
         dataset = self.build_dataset(dataset_path, batch=batch_size, mode='val')
         return build_dataloader(dataset, batch_size, self.args.workers, shuffle=False, rank=-1)  # return dataloader
 
-    def plot_val_samples(self, batch, ni):
+    def plot_val_samples(self, batch, ni, cls_start):
         """Plot validation image samples."""
         plot_images(batch['img'],
                     batch['batch_idx'],
-                    batch['cls'].squeeze(-1),
+                    batch['cls'].squeeze(-1) + cls_start,
                     batch['bboxes'],
                     paths=batch['im_file'],
                     fname=self.save_dir / f'val_batch{ni}_labels.jpg',
                     names=self.names,
                     on_plot=self.on_plot)
 
-    def plot_predictions(self, batch, preds, ni):
+    def plot_predictions(self, batch, preds, ni, cls_start):
         """Plots predicted bounding boxes on input images and saves the result."""
         plot_images(batch['img'],
-                    *output_to_target(preds, max_det=self.args.max_det),
+                    *output_to_target(preds, cls_start, max_det=self.args.max_det),
                     paths=batch['im_file'],
                     fname=self.save_dir / f'val_batch{ni}_pred.jpg',
                     names=self.names,

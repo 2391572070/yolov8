@@ -65,7 +65,7 @@ from ultralytics.cfg import get_cfg
 from ultralytics.data.dataset import YOLODataset
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.nn.autobackend import check_class_names, default_class_names
-from ultralytics.nn.modules import C2f, Detect, SidaDetect, RTDETRDecoder
+from ultralytics.nn.modules import C2f, Detect, SidaDetect, RTDETRDecoder, SidaDetectMerge
 from ultralytics.nn.tasks import DetectionModel, SegmentationModel
 from ultralytics.utils import (ARM64, DEFAULT_CFG, LINUX, LOGGER, MACOS, ROOT, WINDOWS, __version__, callbacks,
                                colorstr, get_default_args, yaml_save)
@@ -212,10 +212,10 @@ class Exporter:
                 if forward_export is not None:
                     m.forward = m.forward_export
                     m.rm_transpose = rm_transpose
-                    if isinstance(m, (Detect, SidaDetect)):
+                    if isinstance(m, (Detect, SidaDetect, SidaDetectMerge)):
                         m.cpu_dfl = cpu_dfl
                         m.cpu_sigmoid = cpu_sigmoid
-            if isinstance(m, (Detect, SidaDetect, RTDETRDecoder)):  # Segment and Pose use Detect base class
+            if isinstance(m, (Detect, SidaDetect, RTDETRDecoder, SidaDetectMerge)):  # Segment and Pose use Detect base class
                 m.dynamic = self.args.dynamic
                 m.export = True
                 m.format = self.args.format

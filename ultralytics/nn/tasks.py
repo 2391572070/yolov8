@@ -10,10 +10,11 @@ import torch.nn as nn
 from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottleneck, BottleneckCSP, C2f, C3Ghost, C3x,
                                     Classify, Concat, Conv, Conv2, ConvTranspose, Detect, DWConv, DWConvTranspose2d,
                                     SidaDetect, Focus, GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv,
-                                    ResNetLayer, RTDETRDecoder, Segment)
+                                    ResNetLayer, RTDETRDecoder, Segment, SidaDetectMerge)
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
-from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8PoseLoss, v8SegmentationLoss
+from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8PoseLoss, v8SegmentationLoss, \
+    SidaDetectionMergeLoss
 from ultralytics.utils.plotting import feature_visualization
 from ultralytics.utils.torch_utils import (fuse_conv_and_bn, fuse_deconv_and_bn, initialize_weights, intersect_dicts,
                                            make_divisible, model_info, scale_img, time_sync)
@@ -181,11 +182,12 @@ class BaseModel(nn.Module):
             (BaseModel): An updated BaseModel object.
         """
         self = super()._apply(fn)
-        m = self.model[-1]  # Detect()
-        if isinstance(m, (Detect, SidaDetect, Segment)):
-            m.stride = fn(m.stride)
-            m.anchors = fn(m.anchors)
-            m.strides = fn(m.strides)
+        models = [self.model[-2], self.model[-3]]  # Detect()
+        for m in models:
+            if isinstance(m, (Detect, SidaDetect, Segment, SidaDetectMerge)):
+                m.stride = fn(m.stride)
+                m.anchors = fn(m.anchors)
+                m.strides = fn(m.strides)
         return self
 
     def load(self, weights, verbose=True):
@@ -203,7 +205,7 @@ class BaseModel(nn.Module):
         if verbose:
             LOGGER.info(f'Transferred {len(csd)}/{len(self.model.state_dict())} items from pretrained weights')
 
-    def loss(self, batch, preds=None):
+    def loss(self, batch, preds=None, branch_size=None):#################### branch_size
         """
         Compute loss.
 
@@ -215,6 +217,10 @@ class BaseModel(nn.Module):
             self.criterion = self.init_criterion()
 
         preds = self.forward(batch['img']) if preds is None else preds
+
+        if branch_size is not None:
+            return self.criterion(preds, batch, branch_size)
+
         return self.criterion(preds, batch)
 
     def init_criterion(self):
@@ -240,16 +246,18 @@ class DetectionModel(BaseModel):
         self.inplace = self.yaml.get('inplace', True)
 
         # Build strides
-        m = self.model[-1]  # Detect()
-        if isinstance(m, (Detect, SidaDetect, Segment, Pose)):
-            s = 256  # 2x min stride
-            m.inplace = self.inplace
-            forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
-            m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
-            self.stride = m.stride
-            m.bias_init()  # only run once
-        else:
-            self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
+        models = [self.model[-2], self.model[-3]]  # Detect()
+        for m in models:
+            if isinstance(m, (Detect, SidaDetect, Segment, Pose, SidaDetectMerge)):
+                s = 256  # 2x min stride
+                m.inplace = self.inplace
+                forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
+                m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
+                self.stride = m.stride
+
+                m.bias_init()  # only run once
+            else:
+                self.stride = torch.Tensor([32])  # default stride for i.e. RTDETR
 
         # Init weights, biases
         initialize_weights(self)
@@ -295,7 +303,7 @@ class DetectionModel(BaseModel):
 
     def init_criterion(self):
         """Initialize the loss criterion for the DetectionModel."""
-        return v8DetectionLoss(self)
+        return SidaDetectionMergeLoss(self)
 
 
 class SegmentationModel(DetectionModel):
@@ -616,7 +624,7 @@ def attempt_load_weights(weights, device=None, inplace=True, fuse=False):
     # Module updates
     for m in ensemble.modules():
         t = type(m)
-        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect, SidaDetect, Segment):
+        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect, SidaDetect, Segment, SidaDetectMerge):
             m.inplace = inplace
         elif t is nn.Upsample and not hasattr(m, 'recompute_scale_factor'):
             m.recompute_scale_factor = None  # torch 1.11.0 compatibility
@@ -652,7 +660,7 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     # Module updates
     for m in model.modules():
         t = type(m)
-        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect, SidaDetect, Segment):
+        if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect, SidaDetect, Segment, SidaDetectMerge):
             m.inplace = inplace
         elif t is nn.Upsample and not hasattr(m, 'recompute_scale_factor'):
             m.recompute_scale_factor = None  # torch 1.11.0 compatibility
@@ -719,7 +727,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in (Detect, SidaDetect, Segment, Pose):
+        elif m in (Detect, SidaDetect, Segment, Pose, SidaDetectMerge):
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
@@ -819,7 +827,7 @@ def guess_model_task(model):
                 return cfg2task(eval(x))
 
         for m in model.modules():
-            if isinstance(m, (Detect, SidaDetect)):
+            if isinstance(m, (Detect, SidaDetect, SidaDetectMerge)):
                 return 'detect'
             elif isinstance(m, Segment):
                 return 'segment'

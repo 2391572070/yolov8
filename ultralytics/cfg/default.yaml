@@ -121,6 +121,8 @@ cfg:  # (str, optional) for overriding defaults.yaml
 tracker: botsort.yaml  # (str) tracker type, choices=[botsort.yaml, bytetrack.yaml]
 
 # Sida settings --------------------------------------------------------------------------------------------------------
+branchcls_start: None
+branchID: None
 sida_deploy: False
 rm_transpose: False
 cpu_dfl: False

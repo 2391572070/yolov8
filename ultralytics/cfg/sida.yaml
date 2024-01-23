@@ -47,6 +47,8 @@ mixup: 0.0  # (float) image mixup (probability)
 copy_paste: 0.0  # (float) segment copy-paste (probability)
 
 # Sida settings --------------------------------------------------------------------------------------------------------
+branchcls_start: None
+branchID: None
 sida_deploy: False
 rm_transpose: False
 cpu_dfl: False

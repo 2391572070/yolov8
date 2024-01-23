@@ -11,6 +11,7 @@ from ultralytics.utils import (ASSETS, DEFAULT_CFG, DEFAULT_CFG_DICT, DEFAULT_CF
                                SETTINGS, SETTINGS_YAML, TESTS_RUNNING, IterableSimpleNamespace, __version__, checks,
                                colorstr, deprecation_warn, yaml_load, yaml_print)
 
+BRANCHID = '1', '2'
 # Define valid tasks and modes
 MODES = 'train', 'val', 'predict', 'export', 'track', 'benchmark'
 TASKS = 'detect', 'segment', 'classify', 'pose'
@@ -342,7 +343,7 @@ def entrypoint(debug=''):
         'hub': lambda: handle_yolo_hub(args[1:]),
         'login': lambda: handle_yolo_hub(args),
         'copy-cfg': copy_default_cfg}
-    full_args_dict = {**DEFAULT_CFG_DICT, **{k: None for k in TASKS}, **{k: None for k in MODES}, **special}
+    full_args_dict = {**DEFAULT_CFG_DICT, **{k: None for k in TASKS}, **{k: None for k in MODES}, **{k: None for k in BRANCHID}, **special}
 
     # Define common misuses of special commands, i.e. -h, -help, --help
     special.update({k[0]: v for k, v in special.items()})  # singular
@@ -368,6 +369,8 @@ def entrypoint(debug=''):
             except (NameError, SyntaxError, ValueError, AssertionError) as e:
                 check_dict_alignment(full_args_dict, {a: ''}, e)
 
+        elif a in BRANCHID:
+            overrides['branchID'] = a
         elif a in TASKS:
             overrides['task'] = a
         elif a in MODES:
@@ -393,6 +396,15 @@ def entrypoint(debug=''):
         LOGGER.warning(f"WARNING ⚠️ 'mode' is missing. Valid modes are {MODES}. Using default 'mode={mode}'.")
     elif mode not in MODES:
         raise ValueError(f"Invalid 'mode={mode}'. Valid modes are {MODES}.\n{CLI_HELP_MSG}")
+
+    branchID = overrides.get('branchID')
+    if branchID is None:
+        LOGGER.warning(f"WARNING ⚠️ 'branchID' is missing. Valid branchID are {BRANCHID}. Using default 'branchID={branchID}'.")
+
+    branchcls_start = overrides.get('branchcls_start')
+    if branchcls_start is None:
+        LOGGER.warning(
+            f"WARNING ⚠️ 'branchcls_start' is missing. Valid branchcls_start are branch_class_num_start. Using default as 'branchcls_start=12' if branch_class_num_start is 12.")
 
     # Task
     task = overrides.pop('task', None)

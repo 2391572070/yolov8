@@ -1,6 +1,7 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
 import math
+import os.path
 import random
 from copy import deepcopy
 
@@ -8,6 +9,7 @@ import cv2
 import numpy as np
 import torch
 import torchvision.transforms as T
+from tqdm import tqdm
 
 from ultralytics.utils import LOGGER, colorstr
 from ultralytics.utils.checks import check_version
@@ -98,13 +100,57 @@ class BaseMixTransform:
 
     def __call__(self, labels):
         """Applies pre-processing transforms and mixup/mosaic transforms to labels data."""
+
+
         if random.uniform(0, 1) > self.p:
             return labels
 
         # Get index of one or three other images
-        indexes = self.get_indexes()
-        if isinstance(indexes, int):
-            indexes = [indexes]
+        # indexes = self.get_indexes()
+        # if isinstance(indexes, int):
+        #     indexes = [indexes]
+
+
+        indexes = []
+        skip_count = 0
+        labels_file_path, labels_file_name = os.path.split(labels['im_file'])
+        count = len(self.get_indexes())
+        if labels['cls'][0] >= np.array([12]):
+            while len(indexes) != count:
+                skip_count += 1
+                if skip_count > 10:
+                    break
+                _indexes = self.get_indexes()
+                for index in _indexes:
+                    label = self.dataset.get_image_and_label(index)
+                    label_file_path, label_file_name = os.path.split(label['im_file'])
+                    if label_file_path == labels_file_path:
+                        indexes.append(index)
+                        if len(indexes) == count:
+                            break
+
+        else:
+            while len(indexes) != count:
+                skip_count += 1
+                if skip_count > 10:
+                    break
+                _indexes = self.get_indexes()
+                for index in _indexes:
+                    label = self.dataset.get_image_and_label(index)
+                    if label['cls'][0] < np.array([12]):
+                        indexes.append(index)
+                        if len(indexes) == count:
+                            break
+
+        if not indexes:
+            return labels
+        else:
+            if len(indexes) == count:
+                indexes = indexes
+            else:
+                for i in range(count - len(indexes)):
+                    indexes.append(indexes[i])
+
 
         # Get images information will be used for Mosaic or MixUp
         mix_labels = [self.dataset.get_image_and_label(i) for i in indexes]
@@ -200,6 +246,7 @@ class Mosaic(BaseMixTransform):
         final_labels['img'] = img3[-self.border[0]:self.border[0], -self.border[1]:self.border[1]]
         return final_labels
 
+
     def _mosaic4(self, labels):
         """Create a 2x2 image mosaic."""
         mosaic_labels = []
@@ -207,6 +254,7 @@ class Mosaic(BaseMixTransform):
         yc, xc = (int(random.uniform(-x, 2 * s + x)) for x in self.border)  # mosaic center x, y
         for i in range(4):
             labels_patch = labels if i == 0 else labels['mix_labels'][i - 1]
+
             # Load image
             img = labels_patch['img']
             h, w = labels_patch.pop('resized_shape')

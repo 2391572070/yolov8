@@ -839,7 +839,7 @@ def plot_tune_results(csv_file='tune_results.csv'):
     LOGGER.info(f'Saved {file}')
 
 
-def output_to_target(output, max_det=300):
+def output_to_target(output, cls_start,max_det=300):
     """Convert model output to target format [batch_id, class_id, x, y, w, h, conf] for plotting."""
     targets = []
     for i, o in enumerate(output):
@@ -847,6 +847,7 @@ def output_to_target(output, max_det=300):
         j = torch.full((conf.shape[0], 1), i)
         targets.append(torch.cat((j, cls, ops.xyxy2xywh(box), conf), 1))
     targets = torch.cat(targets, 0).numpy()
+    targets[:, 1] = targets[:, 1] + cls_start
     return targets[:, 0], targets[:, 1], targets[:, 2:]
 
 
@@ -861,7 +862,7 @@ def feature_visualization(x, module_type, stage, n=32, save_dir=Path('runs/detec
         n (int, optional): Maximum number of feature maps to plot. Defaults to 32.
         save_dir (Path, optional): Directory to save results. Defaults to Path('runs/detect/exp').
     """
-    for m in ['Detect', 'SidaDetect', 'Pose', 'Segment']:
+    for m in ['Detect', 'SidaDetect', 'Pose', 'Segment', 'SidaDetectMerge']:
         if m in module_type:
             return
     batch, channels, height, width = x.shape  # batch, channels, height, width

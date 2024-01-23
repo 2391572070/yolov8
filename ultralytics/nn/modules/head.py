@@ -14,7 +14,7 @@ from .conv import Conv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init_
 
-__all__ = 'Detect', 'SidaDetect', 'Segment', 'Pose', 'Classify', 'RTDETRDecoder'
+__all__ = 'Detect', 'SidaDetect', 'Segment', 'Pose', 'Classify', 'RTDETRDecoder', 'SidaDetectMerge'
 
 
 class Detect(nn.Module):
@@ -128,6 +128,103 @@ class Detect(nn.Module):
         for a, b, s in zip(m.cv2, m.cv3, m.stride):  # from
             a[-1].bias.data[:] = 1.0  # box
             b[-1].bias.data[:m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+
+
+class SidaDetectMerge(nn.Module):
+    """YOLOv8 Detect head for detection models."""
+    dynamic = False  # force grid reconstruction
+    export = False  # export mode
+    shape = None
+    anchors = torch.empty(0)  # init
+    strides = torch.empty(0)  # init
+
+    def __init__(self, nc=80, nc_branchs=None, ch=()):
+        super().__init__()
+        self.nc = nc
+        self.nc_branchs = nc_branchs
+        self.nl = len(ch)
+        self.reg_max = 16
+        self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
+
+    def forward(self, x):
+        if isinstance(x, (list, tuple)):
+            if len(x) > 1:
+                shape = x[0][1][0].shape
+            else:
+                shape = x[1][0].shape
+
+        if self.training:
+            out = []
+            for _x in x:
+                if isinstance(_x, (list, tuple)):
+                    out.extend(_x)
+                else:
+                    out.append(_x)
+            return out
+
+        out = []
+        for _x in x:
+            out.append(_x)
+
+
+        # elif self.dynamic or self.shape != shape:
+        #     if isinstance(x, (list, tuple)):
+        #         if len(x) > 1:
+        #             self.stride = torch.zeros(len(x[0][1]))
+        #             self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(x[0][1], self.stride, 0.5))
+        #             self.shape = shape
+        #         else:
+        #             self.stride = torch.zeros(len(x[1]))
+        #             self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(x[1], self.stride, 0.5))
+        #             self.shape = shape
+
+        # if isinstance(x, (list, tuple)):
+        #     if len(x) > 1:
+        #         out = []
+        #         for output, nc_branch in zip(x, self.nc_branchs):
+        #             if self.dynamic or self.shape != shape:
+        #                 i = self.nc_branchs.index[nc_branch]
+        #                 self.stride = torch.zeros(len(output))
+        #                 self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(output, self.stride, 0.5))
+        #                 self.shape = shape
+        #
+        #             No = nc_branch + self.reg_max * 4
+        #             x_cat = torch.cat([xi.view(shape[0], No, -1) for xi in output], 2)
+        #             if self.export and self.format in (
+        #             'saved_model', 'pb', 'tflite', 'edgetpu', 'tfjs'):  # avoid TF FlexSplitV ops
+        #                 box = x_cat[:, :self.reg_max * 4]
+        #                 cls = x_cat[:, self.reg_max * 4:]
+        #             else:
+        #                 box, cls = x_cat.split((self.reg_max * 4, nc_branch), 1)
+        #             dbox = dist2bbox(self.dfl(box), self.anchors.unsqueeze(0), xywh=True, dim=1) * self.strides
+        #             if self.export and self.format in ('tflite', 'edgetpu'):
+        #                 # Normalize xywh with image size to mitigate quantization error of TFLite integer models as done in YOLOv5:
+        #                 # https://github.com/ultralytics/yolov5/blob/0c8de3fca4a702f8ff5c435e67f378d1fce70243/models/tf.py#L307-L309
+        #                 # See this PR for details: https://github.com/ultralytics/ultralytics/pull/1695
+        #                 img_h = shape[2] * self.stride[0]
+        #                 img_w = shape[3] * self.stride[0]
+        #                 img_size = torch.tensor([img_w, img_h, img_w, img_h], device=dbox.device).reshape(1, 4, 1)
+        #                 dbox /= img_size
+        #             outs = torch.cat((dbox, cls.sigmoid()), 1)
+        #
+        #             if self.export:
+        #                 out.append(outs)
+        #             else:
+        #                 out.append((outs, output))
+        #
+        #         #     end_cls += nc_branch
+        #         #     out_bbox_obj = output[..., :5]
+        #         #     out_cls = torch.zeros((*output.shape[:-1], self.nc), dtype=output.dtype, device=output.device)
+        #         #     out_cls[..., start_cls:end_cls] = output[..., 5:]
+        #         #     outs.append(torch.cat([out_bbox_obj, out_cls], dim=-1))
+        #         #     start_cls = end_cls
+        #         out = out
+        #     else:
+        #         out = x[0]
+        # else:
+        #     out = x
+        return out
+
 
 
 class SidaDetect(Detect):

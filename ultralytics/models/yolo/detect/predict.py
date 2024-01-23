@@ -20,8 +20,12 @@ class DetectionPredictor(BasePredictor):
         ```
     """
 
-    def postprocess(self, preds, img, orig_imgs):
+    def postprocess(self, preds, img, orig_imgs, branchID, branchcls_start):
         """Post-processes predictions and returns a list of Results objects."""
+        if branchID is not None:
+            preds = preds[branchID-1]
+
+
         preds = ops.non_max_suppression(preds,
                                         self.args.conf,
                                         self.args.iou,
@@ -36,6 +40,10 @@ class DetectionPredictor(BasePredictor):
         for i, pred in enumerate(preds):
             orig_img = orig_imgs[i]
             pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
+
+            if branchcls_start is not None:
+                pred[:, 5] = branchcls_start + pred[:, 5]
+
             img_path = self.batch[0][i]
             results.append(Results(orig_img, path=img_path, names=self.model.names, boxes=pred))
         return results

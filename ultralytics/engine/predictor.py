@@ -84,8 +84,11 @@ class BasePredictor:
             cfg (str, optional): Path to a configuration file. Defaults to DEFAULT_CFG.
             overrides (dict, optional): Configuration overrides. Defaults to None.
         """
+
         self.args = get_cfg(cfg, overrides)
         self.save_dir = get_save_dir(self.args)
+        self.branchID = getattr(self.args, 'branchID', None)
+        self.branchcls_start = getattr(self.args, 'branchcls_start', None)
         if self.args.conf is None:
             self.args.conf = 0.25  # default conf=0.25
         self.done_warmup = False
@@ -185,7 +188,7 @@ class BasePredictor:
 
         return log_string
 
-    def postprocess(self, preds, img, orig_imgs):
+    def postprocess(self, preds, img, orig_imgs, branchID, branchcls_start):
         """Post-processes predictions for an image and returns them."""
         return preds
 
@@ -269,7 +272,7 @@ class BasePredictor:
 
                 # Postprocess
                 with profilers[2]:
-                    self.results = self.postprocess(preds, im, im0s)
+                    self.results = self.postprocess(preds, im, im0s, self.branchID, self.branchcls_start)
 
                 self.run_callbacks('on_predict_postprocess_end')
                 # Visualize, save, write results

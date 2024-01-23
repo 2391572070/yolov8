@@ -1,5 +1,5 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
-
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import TaskAlignedAssigner, dist2bbox, make_anchors
-from ultralytics.nn.modules import SidaDetect
+from ultralytics.nn.modules import SidaDetect, SidaDetectMerge, Detect
 
 from .metrics import bbox_iou
 from .tal import bbox2dist
@@ -112,6 +112,296 @@ class KeypointLoss(nn.Module):
         e = d / (2 * self.sigmas) ** 2 / (area + 1e-9) / 2  # from cocoeval
         return (kpt_loss_factor.view(-1, 1) * ((1 - torch.exp(-e)) * kpt_mask)).mean()
 
+class SidaDetectionMergeLoss:
+    """Criterion class for computing training losses."""
+    def __init__(self, model):  # model must be de-paralleled
+        """Initializes v8DetectionLoss with the model, defining model-related properties and BCE loss function."""
+        device = next(model.parameters()).device  # get model device
+        h = model.args  # hyperparameters
+        self.mod = model
+        self.bce = nn.BCEWithLogitsLoss(reduction='none')
+        self.hyp = h
+        self.nc_branchs = model.model[-1].nc_branchs
+        self.device = device
+        # self.stride = m.stride  # model strides
+
+    def preprocess(self, targets, batch_size, scale_tensor):
+        """Preprocesses the target counts and matches with the input batch size to output a tensor."""
+        if targets.shape[0] == 0:
+            out = torch.zeros(batch_size, 0, 5, device=self.device)
+        else:
+            i = targets[:, 0]  # image index
+            _, counts = i.unique(return_counts=True)
+            counts = counts.to(dtype=torch.int32)
+            out = torch.zeros(batch_size, counts.max(), 5, device=self.device)
+            for j in range(batch_size):
+                matches = i == j
+                n = matches.sum()
+                if n:
+                    out[j, :n] = targets[matches, 1:]
+            out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
+        return out
+
+    def bbox_decode(self, anchor_points, pred_dist):
+        """Decode predicted object bounding box coordinates from anchor points and distribution."""
+        if self.use_dfl:
+            b, a, c = pred_dist.shape  # batch, anchors, channels
+            if self.is_sida_detect:
+                pred_dist = (pred_dist.view(b, a, c // 4, 4).sigmoid() * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
+            else:
+                pred_dist = pred_dist.view(b, a, 4, c // 4).softmax(3).matmul(self.proj.type(pred_dist.dtype))
+                # pred_dist = pred_dist.view(b, a, c // 4, 4).transpose(2,3).softmax(3).matmul(self.proj.type(pred_dist.dtype))
+                # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
+        return dist2bbox(pred_dist, anchor_points, xywh=False)
+
+    def call_val_loss(self, preds, batch ,branch_size):
+        """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
+        mo = self.mod.model[-2]  # Detect() module
+        stride = mo.stride[:3]
+        reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
+        self.use_dfl = mo.reg_max > 1
+        self.bbox_loss = BboxLoss(mo.reg_max - 1, use_dfl=self.use_dfl).to(self.device)
+        self.proj = torch.arange(mo.reg_max, dtype=torch.float, device=self.device)
+        self.is_sida_detect = isinstance(mo, (SidaDetect, SidaDetectMerge))
+
+        nc = branch_size
+        no = nc + reg_max * 4
+        self.assigner = TaskAlignedAssigner(topk=10, num_classes=nc, alpha=0.5, beta=6.0)
+
+        feats = preds[1] if isinstance(preds, tuple) else preds
+        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], no, -1) for xi in feats], 2).split(
+            (reg_max * 4, nc), 1)
+
+        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+
+        dtype = pred_scores.dtype
+        batch_size = pred_scores.shape[0]
+        imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * stride[0]  # image size (h,w)
+        anchor_points, stride_tensor = make_anchors(feats, stride, 0.5)
+
+        # Targets
+        targets = torch.cat((batch['batch_idx'].view(-1, 1), batch['cls'].view(-1, 1), batch['bboxes']), 1)
+        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+        gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
+
+        # Pboxes
+        pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+
+        _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
+            pred_scores.detach().sigmoid(), (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+            anchor_points * stride_tensor, gt_labels, gt_bboxes, mask_gt)
+
+        target_scores_sum = max(target_scores.sum(), 1)
+
+        # Cls loss
+        # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
+        loss = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
+        loss *= self.hyp.cls  # cls gain
+
+        return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
+
+
+    def __call__(self, preds, batch, branch_size=None):
+        """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
+        if branch_size is not None:
+            return self.call_val_loss(preds, batch, branch_size)
+        else:
+            keys = batch.keys()
+            object_batch, coco_batch = {}, {}
+
+            im_file, ori_shape, resized_shape, img, cls, bboxes, batch_idx = [], [], [], [], [], [], []
+            im_file1, ori_shape1, resized_shape1, img1, cls1, bboxes1, batch_idx1 = [], [], [], [], [], [], []
+
+            im_file_idx_list_object, im_file_idx_list_coco = [], []
+
+            pred_scores_tl, target_scores_tl, dtype_tl, target_scores_sum_tl = [], [], [], []
+            fg_mask_tl, target_bboxes_tl, stride_tensor_tl, pred_distri_tl, \
+                pred_bboxes_tl, anchor_points_tl, batch_size_tl = [], [], [], [], [], [], []
+
+            for i in range(len(batch['batch_idx'])):
+                if batch['cls'][i].to(self.device) >= torch.tensor([self.nc_branchs[0]]).to(self.device):
+                    im_file_idx = int(batch['batch_idx'][i])
+                    im_file_idx_list_object.append(im_file_idx)
+                    cls.append((batch['cls'][i]-self.nc_branchs[0]))
+                    bboxes.append(batch['bboxes'][i])
+                    batch_idx.append(batch['batch_idx'][i])
+                else:
+                    im_file_idx = int(batch['batch_idx'][i])
+                    im_file_idx_list_coco.append(im_file_idx)
+                    cls1.append(batch['cls'][i])
+                    bboxes1.append(batch['bboxes'][i])
+                    batch_idx1.append(batch['batch_idx'][i])
+
+            file_list_object =sorted(set(im_file_idx_list_object))
+            file_list_coco = sorted(set(im_file_idx_list_coco))
+
+            for j, k in enumerate(keys):
+                if k == 'im_file':
+                    for nu in range(len(file_list_object)):
+                        num = list(file_list_object)[nu]
+                        im_file.append(batch['im_file'][num])
+                    for nu in range(len(file_list_coco)):
+                        num = list(file_list_coco)[nu]
+                        im_file1.append(batch['im_file'][num])
+                if k == 'ori_shape':
+                    for nu in range(len(file_list_object)):
+                        num = list(file_list_object)[nu]
+                        ori_shape.append(tuple(batch['ori_shape'][num]))
+                    for nu in range(len(file_list_coco)):
+                        num = list(file_list_coco)[nu]
+                        ori_shape1.append(tuple(batch['ori_shape'][num]))
+                if k == 'resized_shape':
+                    for nu in range(len(file_list_object)):
+                        num = list(file_list_object)[nu]
+                        resized_shape.append(tuple(batch['resized_shape'][num]))
+                    for nu in range(len(file_list_coco)):
+                        num = list(file_list_coco)[nu]
+                        resized_shape1.append(tuple(batch['resized_shape'][num]))
+                if k == 'img':
+                    for nu in range(len(file_list_object)):
+                        num = list(file_list_object)[nu]
+                        img.append((batch['img'][num]))
+                    for nu in range(len(file_list_coco)):
+                        num = list(file_list_coco)[nu]
+                        img1.append(batch['img'][num])
+
+            if not cls:
+                object_batch = []
+            else:
+                object_batch['im_file'] = tuple(im_file)
+                object_batch['ori_shape'] = tuple(ori_shape)
+                object_batch['resized_shape'] = tuple(resized_shape)
+                object_batch['img'] = torch.stack(img)
+                object_batch['cls'] = torch.stack(cls)
+                object_batch['bboxes'] = torch.stack(bboxes)
+                object_batch['batch_idx'] = torch.reshape(torch.stack(batch_idx), (-1,))
+
+                for i in range(len(object_batch['batch_idx'])):
+                    for j in range(len(file_list_object)):
+                        if object_batch['batch_idx'][i] == file_list_object[j]:
+                            object_batch['batch_idx'][i] = file_list_object.index(file_list_object[j])
+
+            if not cls1:
+                coco_batch = []
+            else:
+                coco_batch['im_file'] = list(im_file1)
+                coco_batch['ori_shape'] = list(ori_shape1)
+                coco_batch['resized_shape'] = list(resized_shape1)
+                coco_batch['img'] = torch.stack(img1)
+                coco_batch['cls'] = torch.stack(cls1)
+                coco_batch['bboxes'] = torch.stack(bboxes1)
+                coco_batch['batch_idx'] = torch.reshape(torch.stack(batch_idx1), (-1,))
+
+                for i in range(len(coco_batch['batch_idx'])):
+                    for j in range(len(file_list_coco)):
+                        if coco_batch['batch_idx'][i] == file_list_coco[j]:
+                            coco_batch['batch_idx'][i] = file_list_coco.index(file_list_coco[j])
+
+            feats_coco = preds[:3][1] if isinstance(preds, tuple) else preds[:3]
+            feats_object = preds[3:][1] if isinstance(preds, tuple) else preds[3:]
+            feat = [feats_coco, feats_object]
+            batch = [coco_batch, object_batch]
+
+            for p in range(len(self.nc_branchs)):
+                if not batch[p]:
+                    pass
+                else:
+                    m = self.mod.model[p-3]  # Detect() module
+                    self.stride = m.stride[:3] #################################################
+                    self.nc = m.nc  # number of classes
+                    self.no = m.no
+                    self.reg_max = m.reg_max
+                    self.use_dfl = m.reg_max > 1
+                    self.bbox_loss = BboxLoss(m.reg_max - 1, use_dfl=self.use_dfl).to(self.device)
+                    self.proj = torch.arange(m.reg_max, dtype=torch.float, device=self.device)
+                    self.is_sida_detect = isinstance(m, (SidaDetect, SidaDetectMerge))
+
+                    feats = feat[p]
+                    feats_test = []
+
+                    if self.nc_branchs[p] == 12:
+                        for j in range(len(feats)):
+                            for q, k in enumerate(file_list_coco):
+                                feats[j][q, :, :, :] = feats[j][k, :, :, :]
+                            feats[j] = feats[j][:len(file_list_coco), :, :, :]
+                            # print(feats)
+                        # feats[j] = feats[j][file_list_coco]
+                    else:
+                        for j in range(len(feats)):
+                            for q, k in enumerate(file_list_object):
+                                feats[j][q, :, :, :] = feats[j][k, :, :, :]
+                            feats[j] = feats[j][:len(file_list_object), :, :, :]
+
+                    pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
+                                                        (self.reg_max * 4, self.nc), 1)
+
+                    pred_scores = pred_scores.permute(0, 2, 1).contiguous()
+                    pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+
+                    dtype = pred_scores.dtype
+                    batch_size = pred_scores.shape[0]
+                    imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
+
+                    anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
+
+                    # Targets
+                    targets = torch.cat((batch[p]['batch_idx'].view(-1, 1), batch[p]['cls'].view(-1, 1), batch[p]['bboxes']), 1)
+                    targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+                    gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+                    mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
+
+                    # Pboxes
+                    pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
+
+                    self.assigner = TaskAlignedAssigner(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
+                    _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
+                        pred_scores.detach().sigmoid(), (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
+                        anchor_points * stride_tensor, gt_labels, gt_bboxes, mask_gt)
+
+                    target_scores_sum = max(target_scores.sum(), 1)
+
+                    pred_scores_tl.append(pred_scores)
+                    target_scores_tl.append(target_scores)
+                    dtype_tl.append(dtype)
+                    target_scores_sum_tl.append(target_scores_sum)
+                    fg_mask_tl.append(fg_mask)
+                    target_bboxes_tl.append(target_bboxes)
+                    stride_tensor_tl.append(stride_tensor)
+                    pred_distri_tl.append(pred_distri)
+                    pred_bboxes_tl.append(pred_bboxes)
+                    anchor_points_tl.append(anchor_points)
+                    batch_size_tl.append(batch_size)
+
+            batch_size_sum = 0.0
+            loss = torch.zeros(3, device=self.device)  # box, cls, dfl
+            for i in range(len(self.nc_branchs)):
+                if not batch[i]:
+                    self.loss_empty = torch.zeros(3, device=self.device)
+                    loss[0] += self.loss_empty[0]
+                    loss[1] += self.loss_empty[1]
+                    loss[2] += self.loss_empty[2]
+                else:
+                    # Cls loss
+                    # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
+                    batch_size_sum += batch_size_tl[i]
+                    loss1 = self.bce(pred_scores_tl[i], target_scores_tl[i].to(dtype_tl[i])).sum() / target_scores_sum_tl[i]  # BCE
+                    loss[1] += loss1
+                    # Bbox loss
+                    if fg_mask_tl[i].sum():
+                        target_bboxes_tl[i] /= stride_tensor_tl[i]
+                        loss0, loss2 = self.bbox_loss(pred_distri_tl[i], pred_bboxes_tl[i], anchor_points_tl[i], target_bboxes_tl[i],
+                                                          target_scores_tl[i], target_scores_sum_tl[i], fg_mask_tl[i])
+                        loss[0] += loss0
+                        loss[2] += loss2
+
+            loss[0] *= self.hyp.box  # box gain
+            loss[1] *= self.hyp.cls  # cls gain
+            loss[2] *= self.hyp.dfl  # dfl gain
+
+            return loss.sum() * batch_size_sum, loss.detach()  # loss(box, cls, dfl)
+
 
 class v8DetectionLoss:
     """Criterion class for computing training losses."""
@@ -131,7 +421,7 @@ class v8DetectionLoss:
         self.device = device
 
         self.use_dfl = m.reg_max > 1
-        self.is_sida_detect = isinstance(m, SidaDetect)
+        self.is_sida_detect = isinstance(m, (SidaDetect, SidaDetectMerge))
         self.assigner = TaskAlignedAssigner(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.bbox_loss = BboxLoss(m.reg_max - 1, use_dfl=self.use_dfl).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
