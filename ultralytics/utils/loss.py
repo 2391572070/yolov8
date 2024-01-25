@@ -306,7 +306,7 @@ class SidaDetectionMergeLoss:
 
             for p in range(len(self.nc_branchs)):
                 if not batch[p]:
-                    pass
+                    continue
                 else:
                     m = self.mod.model[p-3]  # Detect() module
                     self.stride = m.stride[:3] #################################################
@@ -378,10 +378,10 @@ class SidaDetectionMergeLoss:
             loss = torch.zeros(3, device=self.device)  # box, cls, dfl
             for i in range(len(self.nc_branchs)):
                 if not batch[i]:
-                    self.loss_empty = torch.zeros(3, device=self.device)
-                    loss[0] += self.loss_empty[0]
-                    loss[1] += self.loss_empty[1]
-                    loss[2] += self.loss_empty[2]
+                    loss_empty = [feat[i][0].sum() * 0, feat[i][1].sum() * 0, feat[i][2].sum() * 0]
+                    loss[0] += loss_empty[0]
+                    loss[1] += loss_empty[1]
+                    loss[2] += loss_empty[2]
                 else:
                     # Cls loss
                     # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
