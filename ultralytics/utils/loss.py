@@ -154,7 +154,7 @@ class SidaDetectionMergeLoss:
                 # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
         return dist2bbox(pred_dist, anchor_points, xywh=False)
 
-    def call_val_loss(self, preds, batch ,branch_size):
+    def call_val_loss(self, preds, batch, branch_size):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         mo = self.mod.model[-2]  # Detect() module
         stride = mo.stride[:3]
@@ -319,20 +319,17 @@ class SidaDetectionMergeLoss:
                     self.is_sida_detect = isinstance(m, (SidaDetect, SidaDetectMerge))
 
                     feats = feat[p]
-                    feats_test = []
 
                     if self.nc_branchs[p] == 12:
                         for j in range(len(feats)):
-                            for q, k in enumerate(file_list_coco):
-                                feats[j][q, :, :, :] = feats[j][k, :, :, :]
-                            feats[j] = feats[j][:len(file_list_coco), :, :, :]
-                            # print(feats)
-                        # feats[j] = feats[j][file_list_coco]
-                    else:
+                            feats[j] = feats[j][file_list_coco]
+                            # for q, k in enumerate(file_list_coco):
+                            #     feats[j][q, :, :, :] = feats[j][k, :, :, :]
+                            # feats[j] = feats[j][:len(file_list_coco), :, :, :]
+
+                    elif self.nc_branchs[p] == 2:
                         for j in range(len(feats)):
-                            for q, k in enumerate(file_list_object):
-                                feats[j][q, :, :, :] = feats[j][k, :, :, :]
-                            feats[j] = feats[j][:len(file_list_object), :, :, :]
+                            feats[j] = feats[j][file_list_object]
 
                     pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
                                                         (self.reg_max * 4, self.nc), 1)
