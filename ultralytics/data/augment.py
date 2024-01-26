@@ -113,28 +113,24 @@ class BaseMixTransform:
 
         indexes = []
         skip_count = 0
-        labels_file_path, labels_file_name = os.path.split(labels['im_file'])
+        cls_idx = labels['cls'][0]
+        # labels_file_path, labels_file_name = os.path.split(labels['im_file'])
         count = len(self.get_indexes())
-        if labels['cls'][0] >= np.array([12]):
-            while len(indexes) != count:
-                skip_count += 1
-                if skip_count > 10:
-                    break
-                _indexes = self.get_indexes()
+        while len(indexes) != count:
+            skip_count += 1
+            if skip_count > 10:
+                break
+            _indexes = self.get_indexes()
+            if cls_idx >= np.array([12]):
                 for index in _indexes:
                     label = self.dataset.get_image_and_label(index)
-                    label_file_path, label_file_name = os.path.split(label['im_file'])
-                    if label_file_path == labels_file_path:
+                    # label_file_path, label_file_name = os.path.split(label['im_file'])
+                    if label['cls'][0] >= np.array([12]):
                         indexes.append(index)
                         if len(indexes) == count:
                             break
 
-        else:
-            while len(indexes) != count:
-                skip_count += 1
-                if skip_count > 10:
-                    break
-                _indexes = self.get_indexes()
+            else:
                 for index in _indexes:
                     label = self.dataset.get_image_and_label(index)
                     if label['cls'][0] < np.array([12]):
@@ -150,6 +146,8 @@ class BaseMixTransform:
             else:
                 for i in range(count - len(indexes)):
                     indexes.append(indexes[i])
+
+
 
 
         # Get images information will be used for Mosaic or MixUp
