@@ -117,3 +117,23 @@ yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml name=
 
 yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_moto.yaml batch=32 device=\'0\'
 yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_v2_val model=runs/detect/sida_yolov5s_relu_pre_8gpu_v2/weights/last.pt data=ultralytics/cfg/datasets/sida_moto.yaml batch=32 device=\'0\'
+
+yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_v2_val model=runs/detect/sida_yolov5s_relu_pre_8gpu_v2/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml batch=32 device=\'0\'
+原目标检测模型：
+objects365验证集：
+                 Class     Images  Instances      Box(P          R      mAP50  mAP50-95):
+                   all       1886      11288      0.731      0.548      0.612      0.444
+                person       1886       5994       0.82      0.693      0.783      0.557
+                  face       1886       2414      0.926      0.886      0.949      0.728
+                   cat       1886        265      0.773      0.758      0.827      0.671
+                   dog       1886        522      0.869       0.67      0.764      0.593
+         baby_carriage       1886         93      0.679      0.398      0.497      0.359
+               bicycle       1886        596       0.82      0.624      0.708      0.516
+            motorcycle       1886        489      0.858      0.638      0.712       0.53
+              tricycle       1886         34      0.335      0.163      0.132     0.0933
+            wheelchair       1886         45      0.709      0.667      0.705      0.432
+               trolley       1886        261      0.566       0.37      0.379      0.235
+            cell phone       1886        575      0.687      0.158      0.281      0.172
+
+yolo task=detect mode=val name=sida_yolov5s_relu_obj_8gpu_objects365_val model=runs/detect/sida_yolov5s_relu_obj_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365_val.yaml batch=32 device=\'0\'
+yolo task=detect mode=val name=sida_yolov5s_relu_obj_8gpu_object_coco_val model=runs/detect/sida_yolov5s_relu_obj_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_object_coco_val.yaml batch=32 device=\'0\'

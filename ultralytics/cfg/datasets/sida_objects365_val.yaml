@@ -8,7 +8,7 @@
 
 
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: ../datasets/sida_objects365  # dataset root dir
+path: ../datasets/sida_objects365_val  # dataset root dir
 train: train_sida_objects365.txt  # train images (relative to 'path')
 val: val_sida_objects365.txt  # val images (relative to 'path')
 test:  # test images (optional)
@@ -29,7 +29,7 @@ background_image_list_files: [
 background_image_dirs: [
 ]
 
-nc: 12
+nc: 14
 # Classes
 names:
   0: person
@@ -44,11 +44,13 @@ names:
   9: trolley
   10: toy
   11: cell phone
+  12: doorobject
+  13: object
 
 
 object_min_area: {
   'person': 100, 'face': 64, 'cat': 64, 'dog': 64, 'baby_carriage': 100, 'bicycle': 100, 'motorcycle': 100,
-  'tricycle': 100, 'wheelchair': 100, 'trolley': 100, 'toy': 100, 'cell phone': 25
+  'tricycle': 100, 'wheelchair': 100, 'trolley': 100, 'toy': 100, 'cell phone': 25, 'doorobject': 100, 'object': 100
 }
 label_use_object_min_area_filter: False
 
