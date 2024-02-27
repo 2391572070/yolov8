@@ -143,8 +143,8 @@ class SidaDetectMerge(nn.Module):
         self.nc = nc
         self.nc_branchs = nc_branchs
         self.nl = len(ch)
-        self.reg_max = 16
-        self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
+        # self.reg_max = 16
+        # self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
     def forward(self, x):
         if self.training:

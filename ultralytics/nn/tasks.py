@@ -11,7 +11,7 @@ from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottlenec
                                     Classify, Concat, Conv, Conv2, ConvTranspose, Detect, DWConv, DWConvTranspose2d,
                                     SidaDetect, Focus, GhostBottleneck, GhostConv, HGBlock, HGStem, Pose, RepC3, RepConv,
                                     ResNetLayer, RTDETRDecoder, Segment, SidaDetectMerge)
-from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
+from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load, checks
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8PoseLoss, v8SegmentationLoss, \
     SidaDetectionMergeLoss
@@ -198,14 +198,19 @@ class BaseModel(nn.Module):
             weights (dict | torch.nn.Module): The pre-trained weights to be loaded.
             verbose (bool, optional): Whether to log the transfer progress. Defaults to True.
         """
+        # pre_model, ckpt = attempt_load_one_weight(weights)
+        # csd = ckpt['model'].float().state_dict()
+        # csd = intersect_dicts(csd, self.state_dict())
+
         model = weights['model'] if isinstance(weights, dict) else weights  # torchvision models are not dicts
         csd = model.float().state_dict()  # checkpoint state_dict as FP32
         csd = intersect_dicts(csd, self.state_dict())  # intersect
+
         self.load_state_dict(csd, strict=False)  # load
         if verbose:
             LOGGER.info(f'Transferred {len(csd)}/{len(self.model.state_dict())} items from pretrained weights')
 
-    def loss(self, batch, preds=None, branch_size=None):#################### branch_size
+    def loss(self, batch, preds=None, branch_size=None, branch_ID=None):#################### branch_size
         """
         Compute loss.
 
@@ -219,7 +224,7 @@ class BaseModel(nn.Module):
         preds = self.forward(batch['img']) if preds is None else preds
 
         if branch_size is not None:
-            return self.criterion(preds, batch, branch_size)
+            return self.criterion(preds, batch, branch_size, branch_ID)
 
         return self.criterion(preds, batch)
 
@@ -661,6 +666,8 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     for m in model.modules():
         t = type(m)
         if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU, Detect, SidaDetect, Segment, SidaDetectMerge):
+        # if t in (nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU):
+
             m.inplace = inplace
         elif t is nn.Upsample and not hasattr(m, 'recompute_scale_factor'):
             m.recompute_scale_factor = None  # torch 1.11.0 compatibility

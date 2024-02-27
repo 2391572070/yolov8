@@ -23,7 +23,7 @@ from torch import nn, optim
 from ultralytics.cfg import get_cfg, get_save_dir
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.nn.tasks import attempt_load_one_weight, attempt_load_weights
-from ultralytics.utils import (DEFAULT_CFG, LOGGER, RANK, TQDM, __version__, callbacks, clean_url, colorstr, emojis,
+from ultralytics.utils import (DEFAULT_CFG, LOGGER, RANK, LOCAL_RANK, TQDM, __version__, callbacks, clean_url, colorstr, emojis,
                                yaml_save)
 from ultralytics.utils.autobatch import check_train_batch_size
 from ultralytics.utils.checks import check_amp, check_file, check_imgsz, check_model_file_from_stem, print_args
@@ -208,6 +208,7 @@ class BaseTrainer:
             timeout=timedelta(seconds=10800),  # 3 hours
             rank=RANK,
             world_size=world_size)
+
 
     def _setup_train(self, world_size):
         """Builds dataloaders and optimizer on correct rank process."""

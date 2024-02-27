@@ -193,40 +193,20 @@ class BaseValidator:
 
             for j, k in enumerate(keys):
                 if k == 'im_file':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        im_file.append(batch['im_file'][num])
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        im_file1.append(batch['im_file'][num])
+                    im_file.extend(batch['im_file'][num] for num in list(file_list_object))
+                    im_file1.extend(batch['im_file'][num] for num in list(file_list_coco))
                 if k == 'ori_shape':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        ori_shape.append(tuple(batch['ori_shape'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        ori_shape1.append(tuple(batch['ori_shape'][num]))
+                    ori_shape.extend(tuple(batch['ori_shape'][num]) for num in list(file_list_object))
+                    ori_shape1.extend(tuple(batch['ori_shape'][num]) for num in list(file_list_coco))
                 if k == 'resized_shape':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        resized_shape.append(tuple(batch['resized_shape'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        resized_shape1.append(tuple(batch['resized_shape'][num]))
+                    resized_shape.extend(tuple(batch['resized_shape'][num]) for num in list(file_list_object))
+                    resized_shape1.extend(tuple(batch['resized_shape'][num]) for num in list(file_list_coco))
                 if k == 'img':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        img.append((batch['img'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        img1.append(batch['img'][num])
+                    img.extend((batch['img'][num]) for num in list(file_list_object))
+                    img1.extend(batch['img'][num] for num in list(file_list_coco))
                 if k == 'ratio_pad':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        ratio_pad.append((batch['ratio_pad'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        ratio_pad1.append(batch['ratio_pad'][num])
+                    ratio_pad.extend((batch['ratio_pad'][num]) for num in list(file_list_object))
+                    ratio_pad1.extend(batch['ratio_pad'][num] for num in list(file_list_coco))
 
             if not cls:
                 object_batch = []
@@ -279,7 +259,7 @@ class BaseValidator:
                     # Loss
                     with dt[2]:
                         if self.training:
-                            self.loss += model.loss(batch=batch, preds=preds[0], branch_size=12)[1]
+                            self.loss += model.loss(batch=batch, preds=preds[0], branch_size=12, branch_ID=1)[1]
                     # Postprocess
                     with dt[3]:
                         preds = self.postprocess(preds[0])
@@ -301,7 +281,7 @@ class BaseValidator:
                     # Loss
                     with dt_branch[2]:
                         if self.training:
-                            self.loss += model.loss(batch=batch, preds=preds[1], branch_size=2)[1]
+                            self.loss += model.loss(batch=batch, preds=preds[1], branch_size=2, branch_ID=2)[1]
                     # Postprocess
                     with dt_branch[3]:
                         preds = self.postprocess(preds[1])

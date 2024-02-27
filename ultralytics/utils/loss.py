@@ -123,6 +123,10 @@ class SidaDetectionMergeLoss:
         self.hyp = h
         self.nc_branchs = model.model[-1].nc_branchs
         self.device = device
+        self.reg_max = 16
+        self.use_dfl = self.reg_max > 1
+        self.bbox_loss = BboxLoss(self.reg_max - 1, use_dfl=self.use_dfl).to(self.device)
+        self.proj = torch.arange(self.reg_max, dtype=torch.float, device=self.device)
         # self.stride = m.stride  # model strides
 
     def preprocess(self, targets, batch_size, scale_tensor):
@@ -154,23 +158,22 @@ class SidaDetectionMergeLoss:
                 # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
         return dist2bbox(pred_dist, anchor_points, xywh=False)
 
-    def call_val_loss(self, preds, batch, branch_size):
+    def call_val_loss(self, preds, batch, branch_size, branch_ID):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        mo = self.mod.model[-2]  # Detect() module
+        mo = self.mod.model[branch_ID-4]  # Detect() module
         stride = mo.stride[:3]
-        reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
-        self.use_dfl = mo.reg_max > 1
-        self.bbox_loss = BboxLoss(mo.reg_max - 1, use_dfl=self.use_dfl).to(self.device)
-        self.proj = torch.arange(mo.reg_max, dtype=torch.float, device=self.device)
+        # self.reg_max = 16  # DFL channels (ch[0] // 16 to scale 4/8/12/16/20 for n/s/m/l/x)
+        # self.use_dfl = mo.reg_max > 1
+        # self.proj = torch.arange(self.reg_max, dtype=torch.float, device=self.device)
         self.is_sida_detect = isinstance(mo, (SidaDetect, SidaDetectMerge))
 
         nc = branch_size
-        no = nc + reg_max * 4
-        self.assigner = TaskAlignedAssigner(topk=10, num_classes=nc, alpha=0.5, beta=6.0)
+        no = nc + self.reg_max * 4
+        assigner = TaskAlignedAssigner(topk=10, num_classes=nc, alpha=0.5, beta=6.0)
 
         feats = preds[1] if isinstance(preds, tuple) else preds
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], no, -1) for xi in feats], 2).split(
-            (reg_max * 4, nc), 1)
+            (self.reg_max * 4, nc), 1)
 
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
@@ -189,7 +192,7 @@ class SidaDetectionMergeLoss:
         # Pboxes
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
 
-        _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
+        _, target_bboxes, target_scores, fg_mask, _ = assigner(
             pred_scores.detach().sigmoid(), (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
             anchor_points * stride_tensor, gt_labels, gt_bboxes, mask_gt)
 
@@ -203,10 +206,10 @@ class SidaDetectionMergeLoss:
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
 
-    def __call__(self, preds, batch, branch_size=None):
+    def __call__(self, preds, batch, branch_size=None, branch_ID=None):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        if branch_size is not None:
-            return self.call_val_loss(preds, batch, branch_size)
+        if branch_ID is not None:
+            return self.call_val_loss(preds, batch, branch_size, branch_ID)
         else:
             keys = batch.keys()
             object_batch, coco_batch = {}, {}
@@ -239,33 +242,17 @@ class SidaDetectionMergeLoss:
 
             for j, k in enumerate(keys):
                 if k == 'im_file':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        im_file.append(batch['im_file'][num])
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        im_file1.append(batch['im_file'][num])
+                    im_file.extend(batch['im_file'][num] for num in list(file_list_object))
+                    im_file1.extend(batch['im_file'][num] for num in list(file_list_coco))
                 if k == 'ori_shape':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        ori_shape.append(tuple(batch['ori_shape'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        ori_shape1.append(tuple(batch['ori_shape'][num]))
+                    ori_shape.extend(tuple(batch['ori_shape'][num]) for num in list(file_list_object))
+                    ori_shape1.extend(tuple(batch['ori_shape'][num]) for num in list(file_list_coco))
                 if k == 'resized_shape':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        resized_shape.append(tuple(batch['resized_shape'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        resized_shape1.append(tuple(batch['resized_shape'][num]))
+                    resized_shape.extend(tuple(batch['resized_shape'][num]) for num in list(file_list_object))
+                    resized_shape1.extend(tuple(batch['resized_shape'][num]) for num in list(file_list_coco))
                 if k == 'img':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        img.append((batch['img'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        img1.append(batch['img'][num])
+                    img.extend((batch['img'][num]) for num in list(file_list_object))
+                    img1.extend(batch['img'][num] for num in list(file_list_coco))
 
             if not cls:
                 object_batch = []
@@ -306,16 +293,28 @@ class SidaDetectionMergeLoss:
 
             for p in range(len(self.nc_branchs)):
                 if not batch[p]:
+                    pred_scores_tl.append(0)
+                    target_scores_tl.append(0)
+                    dtype_tl.append(0)
+                    target_scores_sum_tl.append(0)
+                    fg_mask_tl.append(0)
+                    target_bboxes_tl.append(0)
+                    stride_tensor_tl.append(0)
+                    pred_distri_tl.append(0)
+                    pred_bboxes_tl.append(0)
+                    anchor_points_tl.append(0)
+                    batch_size_tl.append(0)
                     continue
                 else:
                     m = self.mod.model[p-3]  # Detect() module
-                    self.stride = m.stride[:3] #################################################
-                    self.nc = m.nc  # number of classes
-                    self.no = m.no
-                    self.reg_max = m.reg_max
-                    self.use_dfl = m.reg_max > 1
-                    self.bbox_loss = BboxLoss(m.reg_max - 1, use_dfl=self.use_dfl).to(self.device)
-                    self.proj = torch.arange(m.reg_max, dtype=torch.float, device=self.device)
+                    stride = m.stride[:3] #################################################
+                    nc = m.nc  # number of classes
+                    no = m.no
+                    # reg_max = m.reg_max
+                    # self.use_dfl = m.reg_max > 1
+                    # self.use_dfl = self.reg_max > 1
+                    # bbox_loss = BboxLoss(m.reg_max - 1, use_dfl=self.use_dfl).to(self.device)
+                    # self.proj = torch.arange(m.reg_max, dtype=torch.float, device=self.device)
                     self.is_sida_detect = isinstance(m, (SidaDetect, SidaDetectMerge))
 
                     feats = feat[p]
@@ -331,17 +330,17 @@ class SidaDetectionMergeLoss:
                         for j in range(len(feats)):
                             feats[j] = feats[j][file_list_object]
 
-                    pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-                                                        (self.reg_max * 4, self.nc), 1)
+                    pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], no, -1) for xi in feats], 2).split(
+                                                        (self.reg_max * 4, nc), 1)
 
                     pred_scores = pred_scores.permute(0, 2, 1).contiguous()
                     pred_distri = pred_distri.permute(0, 2, 1).contiguous()
 
                     dtype = pred_scores.dtype
                     batch_size = pred_scores.shape[0]
-                    imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
+                    imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * stride[0]  # image size (h,w)
 
-                    anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
+                    anchor_points, stride_tensor = make_anchors(feats, stride, 0.5)
 
                     # Targets
                     targets = torch.cat((batch[p]['batch_idx'].view(-1, 1), batch[p]['cls'].view(-1, 1), batch[p]['bboxes']), 1)
@@ -352,8 +351,8 @@ class SidaDetectionMergeLoss:
                     # Pboxes
                     pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
 
-                    self.assigner = TaskAlignedAssigner(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
-                    _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
+                    assigner = TaskAlignedAssigner(topk=10, num_classes=nc, alpha=0.5, beta=6.0)
+                    _, target_bboxes, target_scores, fg_mask, _ = assigner(
                         pred_scores.detach().sigmoid(), (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
                         anchor_points * stride_tensor, gt_labels, gt_bboxes, mask_gt)
 
@@ -371,34 +370,72 @@ class SidaDetectionMergeLoss:
                     anchor_points_tl.append(anchor_points)
                     batch_size_tl.append(batch_size)
 
+            params = 0.8
             batch_size_sum = 0.0
-            loss = torch.zeros(3, device=self.device)  # box, cls, dfl
+            loss = torch.zeros(3, device=self.device)
+
+
+            loss_coco = torch.zeros(3, device=self.device)
+            loss_object = torch.zeros(3, device=self.device)
+            loss_tl = [loss_coco, loss_object]
+
+
             for i in range(len(self.nc_branchs)):
                 if not batch[i]:
                     loss_empty = [feat[i][0].sum() * 0, feat[i][1].sum() * 0, feat[i][2].sum() * 0]
-                    loss[0] += loss_empty[0]
-                    loss[1] += loss_empty[1]
-                    loss[2] += loss_empty[2]
+                    # loss_tl[i] = loss_empty
+                    loss_tl[i][0] = loss_empty[0]
+                    loss_tl[i][1] = loss_empty[1]
+                    loss_tl[i][2] = loss_empty[2]
                 else:
                     # Cls loss
                     # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
-                    batch_size_sum += batch_size_tl[i]
+                    batch_size_sum = sum(batch_size_tl)
                     loss1 = self.bce(pred_scores_tl[i], target_scores_tl[i].to(dtype_tl[i])).sum() / target_scores_sum_tl[i]  # BCE
-                    loss[1] += loss1
+                    # loss[1] += loss1
+                    loss_tl[i][1] = loss1
                     # Bbox loss
                     if fg_mask_tl[i].sum():
                         target_bboxes_tl[i] /= stride_tensor_tl[i]
                         loss0, loss2 = self.bbox_loss(pred_distri_tl[i], pred_bboxes_tl[i], anchor_points_tl[i], target_bboxes_tl[i],
                                                           target_scores_tl[i], target_scores_sum_tl[i], fg_mask_tl[i])
-                        loss[0] += loss0
-                        loss[2] += loss2
+
+                        loss_tl[i][0] = loss0
+                        loss_tl[i][2] = loss2
+                        # loss[0] += loss0
+                        # loss[2] += loss2
+
+                # loss = params * loss if i == 0 else (1 - params) * loss
+
+
+
+
+            for i in range(len(self.nc_branchs)):
+                # _loss = loss_tl[i] * batch_size_tl[i]
+                loss[0] += loss_tl[i][0] * batch_size_tl[i]
+                loss[1] += loss_tl[i][1] * batch_size_tl[i]
+                loss[2] += loss_tl[i][2] * batch_size_tl[i]
 
             loss[0] *= self.hyp.box  # box gain
             loss[1] *= self.hyp.cls  # cls gain
             loss[2] *= self.hyp.dfl  # dfl gain
 
-            return loss.sum() * batch_size_sum, loss.detach()  # loss(box, cls, dfl)
+            # loss.sum() * batch_size_sum
 
+            return loss.sum(), loss.detach()  # loss(box, cls, dfl)
+
+
+class AutomaticWeightedLoss(nn.Module):
+    def __init__(self, num=2):
+        super(AutomaticWeightedLoss, self).__init__()
+        params = torch.ones(num, requires_grad=True)
+        self.params = torch.nn.Parameter(params)
+
+    def forward(self, *x):
+        loss_sum = 0
+        for i, loss in enumerate(x):
+            loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+        return loss_sum
 
 class v8DetectionLoss:
     """Criterion class for computing training losses."""

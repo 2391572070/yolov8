@@ -114,10 +114,22 @@ yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml model
 # OK
 yolo task=detect mode=train cfg=ultralytics/cfg/coco_yolov5s_relu.yaml name=coco_yolov5s_relu_8gpu
 yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_pre.yaml name=sida_yolov5s_relu_pre_8gpu_v2
+yolo task=detect mode=train cfg=ultralytics/cfg/sida_yolov5s_relu_obj.yaml name=sida_yolov5s_relu_obj_8gpu
 
 yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_val model=runs/detect/sida_yolov5s_relu_pre_8gpu/weights/last.pt data=ultralytics/cfg/datasets/sida_moto.yaml batch=32 device=\'0\'
 yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_v2_val model=runs/detect/sida_yolov5s_relu_pre_8gpu_v2/weights/last.pt data=ultralytics/cfg/datasets/sida_moto.yaml batch=32 device=\'0\'
 
+#！/bin/bash
+apt-get update && apt-get install wget
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+apt-get install -y -f ./google-chrome-stable_current_amd64.deb
+sed -e '/chrome/ s/^#*/#/' -i /opt/google/chrome/google-chrome
+echo 'exec -a "$0" "$HERE/chrome" "$@" --user-data-dir="$HOME/.config/chrome" --no-sandbox --disable-dev-shm-usage' >> /opt/google/chrome/google-chrome
+
+
+yolo task=detect mode=export model=/root/git/yolov8/runs/detect/sida_yolov5s_relu_obj_8gpu/weights/best.pt format=onnx opset=11 simplify=True imgsz=(640,640) sida_deploy=True
+
+yolo task=detect mode=val name=sida_yolov8s_relu_8gpu_v1_val model=runs/detect/sida_yolov5s_relu_8gpu_v1/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml batch=32 device=\'9\'
 yolo task=detect mode=val name=sida_yolov8s_relu_pre_8gpu_v2_val model=runs/detect/sida_yolov5s_relu_pre_8gpu_v2/weights/last.pt data=ultralytics/cfg/datasets/sida_objects365.yaml batch=32 device=\'0\'
 原目标检测模型：
 objects365验证集：
