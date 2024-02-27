@@ -1,0 +1,138 @@
+# Ultralytics YOLO 🚀, AGPL-3.0 license
+# COCO 2017 dataset http://cocodataset.org by Microsoft
+# Example usage: yolo train data=coco.yaml
+# parent
+# ├── yolov8
+# └── datasets
+#     └── sida
+
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: ../datasets_sida/sida_coco  # dataset root dir
+train: train_sida.txt  # train images (relative to 'path')
+val: val_sida.txt  # val images (relative to 'path')
+test:  # test images (optional)
+
+data_root: '/root/data'
+train_anns: [
+  'coco/annotations/train_coco_merge.json',
+  'moto/train_moto_merge.json',
+  'Objects365/Annotations/train/train_object365_merge.json',
+  'erised/BabyCarriage/annotations/train_babycarriage_merge.json',
+  'erised/XiaoYu_20191010/train_xiaoyu_merge.json',
+  'erised/WIDER/wider_face_split/train_wider_merge.json',
+  'ElevatorMoto/train_elevatormoto_merge.json',
+  'SidaMoto/train.v1.json',
+  'ElevatorRecord/train.json',
+  'ElevatorRecord/train_v2.json',
+  'ElevatorRecord/train_v3.json',
+  'MotoVideo/train_motovideo_merge.json',
+  'CrowdHuman/train_crowdhuman_merge.json',
+  'OCHuman/train_ochuman_merge.json',
+#  'object_coco/train.json',
+
+]
+train_image_dirs: [
+  'coco/train2017',
+  'moto/Images',
+  'Objects365/train',
+  'erised/BabyCarriage/Images',
+  'erised/XiaoYu_20191010',
+  'erised/WIDER/WIDER_train/images',
+  'ElevatorMoto/Images',
+  'SidaMoto/train',
+  'ElevatorRecord/Images',
+  'ElevatorRecord/Images',
+  'ElevatorRecord/Images',
+  'MotoVideo/Images',
+  'CrowdHuman/train/Images',
+  'OCHuman/images',
+#  'object_coco',
+
+]
+val_anns: [
+#    'coco/annotations/val_coco.json',
+    'Objects365/Annotations/val/val_object365_merge.json',
+  #  'erised/XiaoYu_20191010/val_xiaoyu.json',
+  #  'erised/WIDER/wider_face_split/val_wider.json',
+  #  'CrowdHuman/val_crowdhuman.json',
+#    'object_coco/val.json',
+
+]
+val_image_dirs: [
+#    'coco/val2017',
+    'Objects365/val',
+  #  'erised/XiaoYu_20191010',
+  #  'erised/WIDER/WIDER_val/images',
+  #  'CrowdHuman/val/Images',
+#    'object_coco',
+
+]
+background_image_list_files: [
+]
+background_image_dirs: [
+]
+
+nc: 14
+# Classes
+names:
+  0: person
+  1: face
+  2: cat
+  3: dog
+  4: baby_carriage
+  5: bicycle
+  6: motorcycle
+  7: tricycle
+  8: wheelchair
+  9: trolley
+  10: toy
+  11: cell phone
+  12: doorobject
+  13: object
+
+
+object_min_area: {
+  'person': 100, 'face': 64, 'cat': 64, 'dog': 64, 'baby_carriage': 100, 'bicycle': 100, 'motorcycle': 100,
+  'tricycle': 100, 'wheelchair': 100, 'trolley': 100, 'toy': 100, 'cell phone': 25, 'doorobject': 100, 'object': 100
+}
+label_use_object_min_area_filter: False
+
+
+# Download script/URL (optional)
+download: |
+  import os
+  from pathlib import Path
+  from ultralytics.utils.gen_labels import gen_labels, gen_backgrouds
+
+  # Make Directories
+  dir = Path(yaml['path'])  # dataset root dir)
+
+  data_root = Path(yaml['data_root'])
+  names = yaml['names']
+  if yaml.get('label_use_object_min_area_filter', False):
+      object_min_area = yaml.get('object_min_area', None)
+  else:
+      object_min_area = None
+  images_dir = dir / 'images'
+  labels_dir = dir / 'labels'
+
+  labels_dir.mkdir(parents=True, exist_ok=True)
+  if not os.path.exists(images_dir):
+      os.symlink(data_root, images_dir)
+
+  out_file_path = Path(yaml['train'])
+  out_file_path.parent.mkdir(parents=True, exist_ok=True)
+  out_images_file = open(out_file_path, 'w', encoding='utf-8')
+  for ann_file_path, image_dir in zip(yaml['train_anns'], yaml['train_image_dirs']):
+      gen_labels(names, dir, data_root, out_images_file, ann_file_path, image_dir, skip_crowd=True, skip_reflected=False, object_min_area=object_min_area, skips=None)
+  for ann_file_path, image_dir in zip(yaml['background_image_list_files'], yaml['background_image_dirs']):
+      gen_backgrouds(names, dir, data_root, out_images_file, ann_file_path, image_dir)
+  out_images_file.close()
+  
+  out_file_path = Path(yaml['val'])
+  out_file_path.parent.mkdir(parents=True, exist_ok=True)
+  out_images_file = open(out_file_path, 'w', encoding='utf-8')
+  for ann_file_path, image_dir in zip(yaml['val_anns'], yaml['val_image_dirs']):
+      gen_labels(names, dir, data_root, out_images_file, ann_file_path, image_dir, skip_crowd=False, skip_reflected=False, object_min_area=None, skips=None)
+  out_images_file.close()
