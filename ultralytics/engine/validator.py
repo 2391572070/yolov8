@@ -156,181 +156,121 @@ class BaseValidator:
 
         self.run_callbacks('on_val_start')
         dt = Profile(), Profile(), Profile(), Profile()
-        dt_branch = Profile(), Profile(), Profile(), Profile()
+        # dt_branch = Profile(), Profile(), Profile(), Profile()
         bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader))
         self.init_metrics(de_parallel(model))
         self.jdict = []  # empty before each val
 
-        ############################################################################33
-        self.nc_branchs = [12, 2]
-        branch_count = 0
+        branches = self.args.branches if isinstance(
+            self.args.branches, list) else range(self.args.branches) if isinstance(self.args.branches, int) else []
+
         for batch_i, batch in enumerate(bar):
-            keys = batch.keys()
-            object_batch, coco_batch = {}, {}
-
-            im_file, ori_shape, resized_shape, img, cls, bboxes, batch_idx, ratio_pad = [], [], [], [], [], [], [], []
-            im_file1, ori_shape1, resized_shape1, img1, cls1, bboxes1, batch_idx1, ratio_pad1 = [], [], [], [], [], [], [], []
-
-            im_file_idx_list_object, im_file_idx_list_coco = [], []
-
-            for i in range(len(batch['batch_idx'])):
-                if batch['cls'][i].to(self.device) >= torch.tensor([self.nc_branchs[0]]).to(self.device):
-                    im_file_idx = int(batch['batch_idx'][i])
-                    im_file_idx_list_object.append(im_file_idx)
-                    cls.append(batch['cls'][i] - self.nc_branchs[0])
-                    # cls.append(batch['cls'][i])
-                    bboxes.append(batch['bboxes'][i])
-                    batch_idx.append(batch['batch_idx'][i])
-                else:
-                    im_file_idx = int(batch['batch_idx'][i])
-                    im_file_idx_list_coco.append(im_file_idx)
-                    cls1.append(batch['cls'][i])
-                    bboxes1.append(batch['bboxes'][i])
-                    batch_idx1.append(batch['batch_idx'][i])
-
-            file_list_object = sorted(set(im_file_idx_list_object))
-            file_list_coco = sorted(set(im_file_idx_list_coco))
-
-            for j, k in enumerate(keys):
-                if k == 'im_file':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        im_file.append(batch['im_file'][num])
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        im_file1.append(batch['im_file'][num])
-                if k == 'ori_shape':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        ori_shape.append(tuple(batch['ori_shape'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        ori_shape1.append(tuple(batch['ori_shape'][num]))
-                if k == 'resized_shape':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        resized_shape.append(tuple(batch['resized_shape'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        resized_shape1.append(tuple(batch['resized_shape'][num]))
-                if k == 'img':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        img.append((batch['img'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        img1.append(batch['img'][num])
-                if k == 'ratio_pad':
-                    for nu in range(len(file_list_object)):
-                        num = list(file_list_object)[nu]
-                        ratio_pad.append((batch['ratio_pad'][num]))
-                    for nu in range(len(file_list_coco)):
-                        num = list(file_list_coco)[nu]
-                        ratio_pad1.append(batch['ratio_pad'][num])
-
-            if not cls:
-                object_batch = []
-            else:
-                object_batch['im_file'] = list(im_file)
-                object_batch['ori_shape'] = list(ori_shape)
-                object_batch['resized_shape'] = list(resized_shape)
-                object_batch['ratio_pad'] = list(ratio_pad)
-                object_batch['img'] = torch.stack(img)
-                object_batch['cls'] = torch.stack(cls)
-                object_batch['bboxes'] = torch.stack(bboxes)
-                object_batch['batch_idx'] = torch.reshape(torch.stack(batch_idx), (-1,))
-
-                for i in range(len(object_batch['batch_idx'])):
-                    for j in range(len(file_list_object)):
-                        if object_batch['batch_idx'][i] == file_list_object[j]:
-                            object_batch['batch_idx'][i] = file_list_object.index(file_list_object[j])
-
-            if not cls1:
-                coco_batch = []
-            else:
-                coco_batch['im_file'] = list(im_file1)
-                coco_batch['ori_shape'] = list(ori_shape1)
-                coco_batch['resized_shape'] = list(resized_shape1)
-                coco_batch['ratio_pad'] = list(ratio_pad1)
-                coco_batch['img'] = torch.stack(img1)
-                coco_batch['cls'] = torch.stack(cls1)
-                coco_batch['bboxes'] = torch.stack(bboxes1)
-                coco_batch['batch_idx'] = torch.reshape(torch.stack(batch_idx1), (-1,))
-
-                for i in range(len(coco_batch['batch_idx'])):
-                    for j in range(len(file_list_coco)):
-                        if coco_batch['batch_idx'][i] == file_list_coco[j]:
-                            coco_batch['batch_idx'][i] = file_list_coco.index(file_list_coco[j])
-
-            batch_tl = [coco_batch, object_batch]
-
-            self.run_callbacks('on_val_batch_start')
+            self.run_callbacks("on_val_batch_start")
             self.batch_i = batch_i
-            for i in range(len(batch_tl)):
-                if not batch_tl[0] or i != 0:
-                    pass
-                else:
-                    # Preprocess
-                    with dt[0]:
-                        batch = self.preprocess(batch_tl[i])
-                    # Inference
-                    with dt[1]:
-                        preds = model(batch['img'], augment=augment)
-                    # Loss
-                    with dt[2]:
-                        if self.training:
-                            self.loss += model.loss(batch=batch, preds=preds[0], branch_size=12)[1]
-                    # Postprocess
-                    with dt[3]:
-                        preds = self.postprocess(preds[0])
-                    self.update_metrics(preds, batch, cls_start=0)
-                    if self.args.plots and batch_i < 2:
-                        self.plot_val_samples(batch, batch_i, cls_start=0)
-                        self.plot_predictions(batch, preds, batch_i, cls_start=0)
-                    del preds, batch
+            end_class = 0
+            batch_list = []
+            last = len(branches) - 1
 
-                if not batch_tl[1] or i != 1:
-                    pass
-                else:
-                    # Preprocess
-                    with dt_branch[0]:
-                        batch = self.preprocess(batch_tl[i])
-                    # Inference
-                    with dt_branch[1]:
-                        preds = model(batch['img'], augment=augment)
-                    # Loss
-                    with dt_branch[2]:
-                        if self.training:
-                            self.loss += model.loss(batch=batch, preds=preds[1], branch_size=2)[1]
-                    # Postprocess
-                    with dt_branch[3]:
-                        preds = self.postprocess(preds[1])
+            for i in range(len(branches)):
+                batch_list.append({})
 
-                    self.update_metrics(preds, batch, cls_start=12)
-                    if self.args.plots and branch_count < 2:
-                        self.plot_val_samples(batch, branch_count + batch_i, cls_start=12)
-                        self.plot_predictions(batch, preds, branch_count + batch_i, cls_start=12)
-                    branch_count += 1
-                    del preds, batch
+            # Preprocess
+            with dt[0]:
+                batch = self.preprocess(batch)
 
-            self.run_callbacks('on_val_batch_end')
+
+            target = torch.cat((batch['batch_idx'].view(-1, 1), batch['cls'].view(-1, 1),
+                             batch['bboxes']), 1)
+            # Inference
+            with dt[1]:
+                for i, branch in enumerate(branches):
+                    end_class += branch
+                    start_class = end_class
+                    start_class -= branch
+                    if i == 0:
+                        mask = last_mask = target[:, 1] < end_class
+
+                    elif i == last:
+                        mask = start_class <= target[:, 1]
+
+                    else:
+                        _mask = target[:, 1] < end_class
+                        mask = last_mask ^ _mask
+                        last_mask = _mask
+
+                    # mask = mask.squeeze(dim=1)
+                    bat = target[mask]
+                    # batch_idx = batch["batch_idx"].to(dtype=torch.long)[mask]
+                    idxes_idx = torch.unique(bat[:, 0], sorted=True).to(dtype=torch.long)
+
+
+                    if bat.shape[0] > 1:
+                        # idxes_idx = torch.unique(batch_idx, sorted=True).to(dtype=torch.long)
+                        batch_img = []
+                        batch_img.extend(batch['img'][num] for num in idxes_idx)
+                        batch_list[i]['img'] = torch.stack(batch_img)
+                        preds = model(batch_list[i]['img'], augment=augment)
+
+                        # Loss
+                        with dt[2]:
+                            branch_ID = branches.index(branch)
+                            batch_im_file, batch_ori_shape, batch_resized_shape, batch_ratio_pad = [],[],[],[]
+                            batch_im_file.extend(batch['im_file'][num] for num in idxes_idx)
+                            batch_ori_shape.extend(batch['ori_shape'][num] for num in idxes_idx)
+                            batch_resized_shape.extend(batch['resized_shape'][num] for num in idxes_idx)
+                            batch_ratio_pad.extend(batch['ratio_pad'][num] for num in idxes_idx)
+
+                            batch_list[i]['im_file'] = list(batch_im_file)
+                            batch_list[i]['ori_shape'] = list(batch_ori_shape)
+                            batch_list[i]['resized_shape'] = list(batch_resized_shape)
+                            batch_list[i]['ratio_pad'] = list(batch_ratio_pad)
+
+                            batch_list[i]['batch_idx'], batch_list[i]['cls'], batch_list[i]['bboxes'] = bat[:, 0], \
+                                            bat[:, 1].view(-1, 1), bat[:, 2:]
+
+                            # idxes_idx = torch.unique(batch_list[i]['batch_idx'], sorted=True).to(dtype=torch.float32)
+
+                            for j, num in enumerate(batch_list[i]['batch_idx']):
+                                batch_list[i]['batch_idx'][j] = (idxes_idx == num).nonzero().squeeze(dim=1)
+
+                            if end_class - branch > 0:
+                                batch_list[i]['cls'] = batch_list[i]['cls'] - (end_class - branch)
+
+                            if len(branches) > 1 and self.training:
+                                self.loss += model.loss(batch_list[i], preds[branch_ID][1], branch_ID=branch_ID)[1]
+                            elif self.training:
+                                self.loss += model.loss(batch_list[i], preds[1], branch_ID=branch_ID)[1]
+
+                        # Postprocess
+                        with dt[3]:
+                            if len(branches) > 1:
+                                _preds = self.postprocess(preds[branch_ID])
+                            else:
+                                _preds = self.postprocess(preds)
+
+                        self.update_metrics(_preds, batch_list[i], cls_start=start_class)
+                        if self.args.plots and batch_i < 3:
+                            self.plot_val_samples(batch, batch_i, cls_start=start_class)
+                            self.plot_predictions(batch, _preds, batch_i, cls_start=start_class)
+
+            self.run_callbacks("on_val_batch_end")
 
         stats = self.get_stats()
         self.check_stats(stats)
         self.finalize_metrics()
         self.print_results()
         speed_1 = dict(zip(self.speed.keys(), (x.t / len(self.dataloader.dataset) * 1E3 for x in dt)))
-        speed_2 = dict(zip(self.speed.keys(), (x.t / len(self.dataloader.dataset) * 1E3 for x in dt_branch)))
+        # speed_2 = dict(zip(self.speed.keys(), (x.t / len(self.dataloader.dataset) * 1E3 for x in dt_branch)))
         self.run_callbacks('on_val_end')
         if self.training:
             model.float()
             results = {**stats, **trainer.label_loss_items(self.loss.cpu() / len(self.dataloader), prefix='val')}
             return {k: round(float(v), 5) for k, v in results.items()}  # return results as 5 decimal place floats
         else:
-            LOGGER.info('Speed_coco: %.1fms preprocess, %.1fms inference, %.1fms loss, %.1fms postprocess per image' %
+            LOGGER.info('Speed: %.1fms preprocess, %.1fms inference, %.1fms loss, %.1fms postprocess per image' %
                         tuple(speed_1.values()))
-            LOGGER.info('Speed_object: %.1fms preprocess, %.1fms inference, %.1fms loss, %.1fms postprocess per image' %
-                        tuple(speed_2.values()))
+            # LOGGER.info('Speed_object: %.1fms preprocess, %.1fms inference, %.1fms loss, %.1fms postprocess per image' %
+            #             tuple(speed_2.values()))
             if self.args.save_json and self.jdict:
                 with open(str(self.save_dir / 'predictions.json'), 'w') as f:
                     LOGGER.info(f'Saving {f.name}...')

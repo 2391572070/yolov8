@@ -143,10 +143,14 @@ class SidaDetectMerge(nn.Module):
         self.nc = nc
         self.nc_branchs = nc_branchs
         self.nl = len(ch)
-        self.reg_max = 16
-        self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
     def forward(self, x):
+        if isinstance(x, (list, tuple)):
+            if len(x) > 1:
+                shape = x[0][1][0].shape
+            else:
+                shape = x[1][0].shape
+
         if self.training:
             out = []
             for _x in x:

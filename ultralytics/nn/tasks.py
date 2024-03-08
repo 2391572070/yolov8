@@ -14,7 +14,7 @@ from ultralytics.nn.modules import (AIFI, C1, C2, C3, C3TR, SPP, SPPF, Bottlenec
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8PoseLoss, v8SegmentationLoss, \
-    SidaDetectionMergeLoss
+    SidaDetectionMergeLoss, SidaDetectionMergeLossV1
 from ultralytics.utils.plotting import feature_visualization
 from ultralytics.utils.torch_utils import (fuse_conv_and_bn, fuse_deconv_and_bn, initialize_weights, intersect_dicts,
                                            make_divisible, model_info, scale_img, time_sync)
@@ -171,7 +171,7 @@ class BaseModel(nn.Module):
         """
         return model_info(self, detailed=detailed, verbose=verbose, imgsz=imgsz)
 
-    def _apply(self, fn):
+    def _apply(self, fn):############################################
         """
         Applies a function to all the tensors in the model that are not parameters or registered buffers.
 
@@ -182,7 +182,17 @@ class BaseModel(nn.Module):
             (BaseModel): An updated BaseModel object.
         """
         self = super()._apply(fn)
-        models = [self.model[-2], self.model[-3]]  # Detect()
+
+        if isinstance(self.model[-1], Detect):
+            models = [self.model[-1]]
+        else:
+            branches = self.model[-1].nc_branchs
+            models = []
+            for i in range(len(branches)):
+                models.append(self.model[i - len(branches) - 1])
+
+
+        # models = [self.model[-2], self.model[-3]]  # Detect()
         for m in models:
             if isinstance(m, (Detect, SidaDetect, Segment, SidaDetectMerge)):
                 m.stride = fn(m.stride)
@@ -205,7 +215,7 @@ class BaseModel(nn.Module):
         if verbose:
             LOGGER.info(f'Transferred {len(csd)}/{len(self.model.state_dict())} items from pretrained weights')
 
-    def loss(self, batch, preds=None, branch_size=None):#################### branch_size
+    def loss(self, batch, preds=None, branch_ID=None):#################### branch_size
         """
         Compute loss.
 
@@ -218,8 +228,8 @@ class BaseModel(nn.Module):
 
         preds = self.forward(batch['img']) if preds is None else preds
 
-        if branch_size is not None:
-            return self.criterion(preds, batch, branch_size)
+        if branch_ID is not None:
+            return self.criterion(preds, batch, branch_ID)
 
         return self.criterion(preds, batch)
 
@@ -245,10 +255,17 @@ class DetectionModel(BaseModel):
         self.names = {i: f'{i}' for i in range(self.yaml['nc'])}  # default names dict
         self.inplace = self.yaml.get('inplace', True)
 
-        # Build strides
-        models = [self.model[-2], self.model[-3]]  # Detect()
+        # Build strides #######################################################
+        if isinstance(self.model[-1], Detect):
+            models = [self.model[-1]]
+        else:
+            branches = self.model[-1].nc_branchs
+            models = []
+            for i in range(len(branches)):
+                models.append(self.model[i - len(branches) - 1])
+
         for m in models:
-            if isinstance(m, (Detect, SidaDetect, Segment, Pose, SidaDetectMerge)):
+            if isinstance(m, (Detect, SidaDetect, Segment, Pose)):
                 s = 256  # 2x min stride
                 m.inplace = self.inplace
                 forward = lambda x: self.forward(x)[0] if isinstance(m, (Segment, Pose)) else self.forward(x)
@@ -303,7 +320,7 @@ class DetectionModel(BaseModel):
 
     def init_criterion(self):
         """Initialize the loss criterion for the DetectionModel."""
-        return SidaDetectionMergeLoss(self)
+        return SidaDetectionMergeLossV1(self)
 
 
 class SegmentationModel(DetectionModel):

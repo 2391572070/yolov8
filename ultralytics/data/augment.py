@@ -92,11 +92,12 @@ class BaseMixTransform:
     This implementation is from mmyolo.
     """
 
-    def __init__(self, dataset, pre_transform=None, p=0.0) -> None:
+    def __init__(self, dataset, pre_transform=None, p=0.0, branches=None) -> None:
         """Initializes the BaseMixTransform object with dataset, pre_transform, and probability."""
         self.dataset = dataset
         self.pre_transform = pre_transform
         self.p = p
+        self.branches = branches
 
     def __call__(self, labels):
         """Applies pre-processing transforms and mixup/mosaic transforms to labels data."""
@@ -105,38 +106,74 @@ class BaseMixTransform:
         if random.uniform(0, 1) > self.p:
             return labels
 
-        # Get index of one or three other images
-        # indexes = self.get_indexes()
-        # if isinstance(indexes, int):
-        #     indexes = [indexes]
-
+        branches = self.branches if isinstance(
+            self.branches, list) else range(self.branches) if isinstance(self.branches, int) else []
 
         indexes = []
         skip_count = 0
-        cls_idx = labels['cls'][0]
-        # labels_file_path, labels_file_name = os.path.split(labels['im_file'])
         count = len(self.get_indexes())
-        while len(indexes) != count:
-            skip_count += 1
-            if skip_count > 10:
-                break
-            _indexes = self.get_indexes()
-            if cls_idx >= np.array([12]):
+
+        if len(labels['cls']) < 1:
+            # Get index of one or three other images
+            dir_path, file_name = os.path.split(labels['im_file'])
+
+            while len(indexes) != count:
+                skip_count += 1
+                if skip_count > 10:
+                    break
+                _indexes = self.get_indexes()
                 for index in _indexes:
-                    label = self.dataset.get_image_and_label(index)
-                    # label_file_path, label_file_name = os.path.split(label['im_file'])
-                    if label['cls'][0] >= np.array([12]):
+                    _label = self.dataset.get_image_and_label(index)
+                    _dir_path, _file_name = os.path.split(_label['im_file'])
+                    if _dir_path == dir_path:
                         indexes.append(index)
                         if len(indexes) == count:
                             break
 
+        else:
+            # branches = [12, 2, 4, 8]
+            if len(branches) > 1:
+                branches_idx = []
+                bra = 0
+                for branch in branches:
+                    bra += branch
+                    branches_idx.append(bra - 1)
+
+                cls_idx = labels['cls'][0]
+                mask = np.array(branches_idx) >= cls_idx
+                end_class = (np.array(branches_idx)[mask]).reshape(-1, 1)[0]
+                start_class = (end_class - np.array(branches)[mask] + 1).reshape(-1, 1)[0]
+
+                # indexes = []
+                # skip_count = 0
+                # count = len(self.get_indexes())
+                while len(indexes) != count:
+                    skip_count += 1
+                    if skip_count > 10:
+                        break
+                    _indexes = self.get_indexes()
+                    for index in _indexes:
+                        _label = self.dataset.get_image_and_label(index)
+                        _label_cls = _label['cls'][0]
+                        if start_class <= _label_cls <= end_class:
+                            indexes.append(index)
+                            if len(indexes) == count:
+                                break
+
+                # if not indexes:
+                #     return labels
+                # else:
+                #     if len(indexes) == count:
+                #         indexes = indexes
+                #     else:
+                #         for i in range(count - len(indexes)):
+                #             indexes.append(indexes[i])
+
             else:
-                for index in _indexes:
-                    label = self.dataset.get_image_and_label(index)
-                    if label['cls'][0] < np.array([12]):
-                        indexes.append(index)
-                        if len(indexes) == count:
-                            break
+                # Get index of one or three other images
+                indexes = self.get_indexes()
+                if isinstance(indexes, int):
+                    indexes = [indexes]
 
         if not indexes:
             return labels
@@ -146,8 +183,6 @@ class BaseMixTransform:
             else:
                 for i in range(count - len(indexes)):
                     indexes.append(indexes[i])
-
-
 
 
         # Get images information will be used for Mosaic or MixUp
@@ -186,7 +221,7 @@ class Mosaic(BaseMixTransform):
         n (int, optional): The grid size, either 4 (for 2x2) or 9 (for 3x3).
     """
 
-    def __init__(self, dataset, imgsz=640, p=1.0, n=4):
+    def __init__(self, dataset, imgsz=640, p=1.0, n=4, branches=None):
         """Initializes the object with a dataset, image size, probability, and border."""
         assert 0 <= p <= 1.0, f'The probability should be in range [0, 1], but got {p}.'
         assert n in (4, 9), 'grid must be equal to 4 or 9.'
@@ -195,6 +230,7 @@ class Mosaic(BaseMixTransform):
         self.imgsz = imgsz
         self.border = (-imgsz // 2, -imgsz // 2)  # width, height
         self.n = n
+        self.branches = branches
 
     def get_indexes(self, buffer=True):
         """Return a list of random indexes from the dataset."""
@@ -365,9 +401,9 @@ class Mosaic(BaseMixTransform):
 class MixUp(BaseMixTransform):
     """Class for applying MixUp augmentation to the dataset."""
 
-    def __init__(self, dataset, pre_transform=None, p=0.0) -> None:
+    def __init__(self, dataset, pre_transform=None, p=0.0, branches=None) -> None:
         """Initializes MixUp object with dataset, pre_transform, and probability of applying MixUp."""
-        super().__init__(dataset=dataset, pre_transform=pre_transform, p=p)
+        super().__init__(dataset=dataset, pre_transform=pre_transform, p=p, branches=branches)
 
     def get_indexes(self):
         """Get a random index from the dataset."""
@@ -999,7 +1035,7 @@ class Format:
 def v8_transforms(dataset, imgsz, hyp, stretch=False):
     """Convert images to a size suitable for YOLOv8 training."""
     pre_transform = Compose([
-        Mosaic(dataset, imgsz=imgsz, p=hyp.mosaic),
+        Mosaic(dataset, imgsz=imgsz, p=hyp.mosaic, branches=hyp.branches),
         CopyPaste(p=hyp.copy_paste),
         RandomPerspective(
             degrees=hyp.degrees,
@@ -1020,7 +1056,7 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
 
     return Compose([
         pre_transform,
-        MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup),
+        MixUp(dataset, pre_transform=pre_transform, p=hyp.mixup, branches=hyp.branches),
         Albumentations(p=1.0),
         RandomHSV(hgain=hyp.hsv_h, sgain=hyp.hsv_s, vgain=hyp.hsv_v),
         RandomFlip(direction='vertical', p=hyp.flipud),

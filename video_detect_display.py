@@ -6,11 +6,12 @@ from ultralytics import YOLO
 
 # 初始化YOLOv8模型
 
-mdl = '/home/skon/PycharmProjects/yolov8-sida/runs/detect/train2/weights/best.pt'
+mdl = '/home/skon/PycharmProjects/yolov8-sida/runs/detect/train6/weights/best.pt'
 # 设置自己训练好的模型路径
 model = YOLO(mdl)
-videos_root_path = '/media/skon/Data/Data/single_viedo_test'
-out_branch_name = 'coco'
+videos_root_path = '/media/skon/Data/Data/Upload_video/out'
+detected_videos_path = '/media/skon/Data/Data/Upload_video'
+out_branch_name = 'object_detected'
 
 pause = True
 
@@ -34,10 +35,10 @@ for filename in os.listdir(videos_root_path):
             new_height = 720
 
             # 设置保存视频的文件名、编解码器和帧速率
-            output_path = os.path.join(videos_root_path, out_branch_name)  # 替换为你的输出视频文件路径
+            output_path = os.path.join(detected_videos_path, out_branch_name)  # 替换为你的输出视频文件路径
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
-            output_path = os.path.join(videos_root_path, out_branch_name, filename)
+            output_path = os.path.join(detected_videos_path, out_branch_name, filename)
             fourcc = cv2.VideoWriter_fourcc(*'XVID')
             out = cv2.VideoWriter(output_path, fourcc, 20.0, (original_width, original_height))
 
@@ -49,7 +50,7 @@ for filename in os.listdir(videos_root_path):
                     break
 
                 # 对每一帧进行预测。并设置置信度阈值为0.8，需要其他参数，可直接在后面加
-                results = model(frame, False, conf=0.4, branchID=1, branchcls_start=0)
+                results = model(frame, False, conf=0.5, branchID=2, branchcls_start=12)
                 conf = True
                 # 绘制预测结果
                 for result in results:
