@@ -8,64 +8,64 @@
 
 
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: ../datasets_sida/sida_object  # dataset root dir
+path: ../datasets_sida/sida_coco_object  # dataset root dir
 train: train_sida.txt  # train images (relative to 'path')
 val: val_sida.txt  # val images (relative to 'path')
 test:  # test images (optional)
 
 data_root: '/root/data'
 train_anns: [
-#  'coco/annotations/train_coco_merge.json',
-#  'moto/train_moto_merge.json',
-#  'Objects365/Annotations/train/train_object365_merge.json',
-#  'erised/BabyCarriage/annotations/train_babycarriage_merge.json',
-#  'erised/XiaoYu_20191010/train_xiaoyu_merge.json',
-#  'erised/WIDER/wider_face_split/train_wider_merge.json',
-#  'ElevatorMoto/train_elevatormoto_merge.json',
-#  'SidaMoto/train.v1.json',
-#  'ElevatorRecord/train.json',
-#  'ElevatorRecord/train_v2.json',
-#  'ElevatorRecord/train_v3.json',
-#  'MotoVideo/train_motovideo_merge.json',
-#  'CrowdHuman/train_crowdhuman_merge.json',
-#  'OCHuman/train_ochuman_merge.json',
+  'coco/annotations/train_coco_merge.json',
+  'moto/train_moto_merge.json',
+  'Objects365/Annotations/train/train_object365_merge.json',
+  'erised/BabyCarriage/annotations/train_babycarriage_merge.json',
+  'erised/XiaoYu_20191010/train_xiaoyu_merge.json',
+  'erised/WIDER/wider_face_split/train_wider_merge.json',
+  'ElevatorMoto/train_elevatormoto_merge.json',
+  'SidaMoto/train.v1.json',
+  'ElevatorRecord/train.json',
+  'ElevatorRecord/train_v2.json',
+  'ElevatorRecord/train_v3.json',
+  'MotoVideo/train_motovideo_merge.json',
+  'CrowdHuman/train_crowdhuman_merge.json',
+  'OCHuman/train_ochuman_merge.json',
   'object_coco/train.json',
 
 ]
 train_image_dirs: [
-#  'coco/train2017',
-#  'moto/Images',
-#  'Objects365/train',
-#  'erised/BabyCarriage/Images',
-#  'erised/XiaoYu_20191010',
-#  'erised/WIDER/WIDER_train/images',
-#  'ElevatorMoto/Images',
-#  'SidaMoto/train',
-#  'ElevatorRecord/Images',
-#  'ElevatorRecord/Images',
-#  'ElevatorRecord/Images',
-#  'MotoVideo/Images',
-#  'CrowdHuman/train/Images',
-#  'OCHuman/images',
+  'coco/train2017',
+  'moto/Images',
+  'Objects365/train',
+  'erised/BabyCarriage/Images',
+  'erised/XiaoYu_20191010',
+  'erised/WIDER/WIDER_train/images',
+  'ElevatorMoto/Images',
+  'SidaMoto/train',
+  'ElevatorRecord/Images',
+  'ElevatorRecord/Images',
+  'ElevatorRecord/Images',
+  'MotoVideo/Images',
+  'CrowdHuman/train/Images',
+  'OCHuman/images',
   'object_coco',
 
 ]
 val_anns: [
-  #  'coco/annotations/val_coco.json',
-#  'Objects365/Annotations/val/val_object365_merge.json',
+#    'coco/annotations/val_coco.json',
+    'Objects365/Annotations/val/val_object365_merge.json',
   #  'erised/XiaoYu_20191010/val_xiaoyu.json',
   #  'erised/WIDER/wider_face_split/val_wider.json',
   #  'CrowdHuman/val_crowdhuman.json',
-  'object_coco/val.json',
+    'object_coco/val.json',
 
 ]
 val_image_dirs: [
-  #  'coco/val2017',
-#  'Objects365/val',
+#    'coco/val2017',
+    'Objects365/val',
   #  'erised/XiaoYu_20191010',
   #  'erised/WIDER/WIDER_val/images',
   #  'CrowdHuman/val/Images',
-  'object_coco',
+    'object_coco',
 
 ]
 background_image_list_files: [
