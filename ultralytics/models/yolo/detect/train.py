@@ -1,13 +1,14 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
 from copy import copy
+from pathlib import Path
 
 import numpy as np
 
 from ultralytics.data import build_dataloader, build_yolo_dataset
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
-from ultralytics.nn.tasks import DetectionModel
+from ultralytics.nn.tasks import DetectionModel, attempt_load_one_weight
 from ultralytics.utils import LOGGER, RANK, LOCAL_RANK
 from ultralytics.utils.plotting import plot_images, plot_labels, plot_results
 from ultralytics.utils.torch_utils import de_parallel, torch_distributed_zero_first
@@ -70,6 +71,8 @@ class DetectionTrainer(BaseTrainer):
         """Return a YOLO detection model."""
         model = DetectionModel(cfg, nc=self.data['nc'], verbose=verbose and RANK == -1)
         if weights:
+            if isinstance(weights,(str, Path)):
+                weights, self.ckpt = attempt_load_one_weight(weights)
             model.load(weights)
         return model
 

@@ -478,6 +478,10 @@ class BaseTrainer:
             cfg = ckpt['model'].yaml
         else:
             cfg = model
+
+        if isinstance(self.args.pretrained, (str, Path)):
+            weights = self.args.pretrained
+
         self.model = self.get_model(cfg=cfg, weights=weights, verbose=RANK == -1)  # calls Model(cfg, weights)
         return ckpt
 
