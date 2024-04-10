@@ -5,10 +5,13 @@ import sys
 from pathlib import Path
 from typing import Union
 
+import torch
+
 from ultralytics.cfg import TASK2DATA, get_cfg, get_save_dir
 from ultralytics.hub.utils import HUB_WEB_ROOT
-from ultralytics.nn.tasks import attempt_load_one_weight, guess_model_task, nn, yaml_model_load
+from ultralytics.nn.tasks import attempt_load_one_weight, guess_model_task, nn, yaml_model_load, torch_safe_load
 from ultralytics.utils import ASSETS, DEFAULT_CFG_DICT, LOGGER, RANK, callbacks, checks, emojis, yaml_load
+from ultralytics.utils.torch_utils import intersect_dicts
 
 
 class Model(nn.Module):
@@ -52,7 +55,7 @@ class Model(nn.Module):
         list(ultralytics.engine.results.Results): The prediction results.
     """
 
-    def __init__(self, model: Union[str, Path] = 'yolov8n.pt', task=None) -> None:
+    def __init__(self, model: Union[str, Path] = 'yolov8n.pt', task=None, verbose: bool = False,) -> None:
         """
         Initializes the YOLO model.
 
@@ -72,7 +75,7 @@ class Model(nn.Module):
         self.metrics = None  # validation/training metrics
         self.session = None  # HUB session
         self.task = task  # task type
-        model = str(model).strip()  # strip spaces
+        self.model_name = model = str(model).strip()  # strip spaces
 
         # Check if Ultralytics HUB model from https://hub.ultralytics.com
         if self.is_hub_model(model):
@@ -89,7 +92,7 @@ class Model(nn.Module):
         # Load or create new YOLO model
         model = checks.check_model_file_from_stem(model)  # add suffix, i.e. yolov8n -> yolov8n.pt
         if Path(model).suffix in ('.yaml', '.yml'):
-            self._new(model, task)
+            self._new(model, task, verbose=verbose)
         else:
             self._load(model, task)
 
@@ -133,6 +136,12 @@ class Model(nn.Module):
         self.model.args = {**DEFAULT_CFG_DICT, **self.overrides}  # combine default and model args (prefer model args)
         self.model.task = self.task
 
+        # ckpt, weight = torch_safe_load('/root/work/yolov8/coco_yolov5s_relu_8gpu/weights/best.pt')
+        # csd = ckpt['model'].float().state_dict()
+        # csd = intersect_dicts(csd, self.model.state_dict())
+        # self.model.load_state_dict(csd, strict= False)
+        # print(f'Transferred {len(csd)}/{len(self.model.state_dict())} items')
+
     def _load(self, weights: str, task=None):
         """
         Initializes a new model and infers the task type from the model head.
@@ -167,7 +176,7 @@ class Model(nn.Module):
                 f"i.e. 'yolo predict model=yolov8n.onnx'.\nTo run CUDA or MPS inference please pass the device "
                 f"argument directly in your inference command, i.e. 'model.predict(source=..., device=0)'")
 
-    def reset_weights(self):
+    def reset_weights(self) -> "Model":
         """Resets the model modules parameters to randomly initialized values, losing all training information."""
         self._check_is_pytorch_model()
         for m in self.model.modules():
@@ -177,11 +186,14 @@ class Model(nn.Module):
             p.requires_grad = True
         return self
 
-    def load(self, weights='yolov8n.pt'):
+    def load(self, weights=None) -> "Model":
         """Transfers parameters with matching names and shapes from 'weights' to model."""
+        # default weights='yolov8n.pt'
         self._check_is_pytorch_model()
+
         if isinstance(weights, (str, Path)):
             weights, self.ckpt = attempt_load_one_weight(weights)
+
         self.model.load(weights)
         return self
 
@@ -351,7 +363,10 @@ class Model(nn.Module):
         self.trainer = (trainer or self._smart_load('trainer'))(overrides=args, _callbacks=self.callbacks)
         if not args.get('resume'):  # manually set model only if not resuming
             self.trainer.model = self.trainer.get_model(weights=self.model if self.ckpt else None, cfg=self.model.yaml)
+
+            # self.trainer.model = self.trainer.get_model(weights=self.model if self.ckpt else None, cfg=self.trainer.model)
             self.model = self.trainer.model
+
         self.trainer.hub_session = self.session  # attach optional HUB session
         self.trainer.train()
         # Update model and cfg after training
@@ -391,7 +406,8 @@ class Model(nn.Module):
     @property
     def names(self):
         """Returns class names of the loaded model."""
-        return self.model.names if hasattr(self.model, 'names') else None
+        from ultralytics.nn.autobackend import check_class_names
+        return check_class_names(self.model.names) if hasattr(self.model, 'names') else None
 
     @property
     def device(self):

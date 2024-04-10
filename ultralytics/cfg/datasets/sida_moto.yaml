@@ -8,7 +8,7 @@
 
 
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: ../datasets/sida_moto  # dataset root dir
+path: ../datasets_sida/sida_moto  # dataset root dir
 train: train.txt  # train images (relative to 'path')
 val: val.txt  # val images (relative to 'path')
 test:  # test images (optional)
@@ -16,14 +16,20 @@ test:  # test images (optional)
 data_root: '/root/data'
 train_anns: [
   'SidaMoto/train.v1.json',
+  'SidaMoto/train.v2.json',
+  'SidaMoto/train.v3.json',
 ]
 train_image_dirs: [
+  'SidaMoto/train',
+  'SidaMoto/train',
   'SidaMoto/train',
 ]
 val_anns: [
   'SidaMoto/test.v1.json',
+  'SidaMoto/test.v2.json',
 ]
 val_image_dirs: [
+  'SidaMoto/test',
   'SidaMoto/test',
 ]
 background_image_list_files: [

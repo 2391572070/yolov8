@@ -5,7 +5,7 @@ Train a model on a dataset.
 Usage:
     $ yolo mode=train model=yolov8n.pt data=coco128.yaml imgsz=640 epochs=100 batch=16
 """
-
+import gc
 import math
 import os
 import subprocess
@@ -412,6 +412,8 @@ class BaseTrainer:
                 self.scheduler.step()
             self.run_callbacks('on_fit_epoch_end')
             torch.cuda.empty_cache()  # clear GPU memory at end of epoch, may help reduce CUDA out of memory errors
+            gc.collect()
+            os.system('sync && echo 3 > /proc/sys/vm/drop_caches')
 
             # Early Stopping
             if RANK != -1:  # if DDP training
@@ -430,6 +432,8 @@ class BaseTrainer:
                 self.plot_metrics()
             self.run_callbacks('on_train_end')
         torch.cuda.empty_cache()
+        gc.collect()
+        os.system('sync && echo 3 > /proc/sys/vm/drop_caches')
         self.run_callbacks('teardown')
 
     def save_model(self):
@@ -478,6 +482,10 @@ class BaseTrainer:
             cfg = ckpt['model'].yaml
         else:
             cfg = model
+
+        if isinstance(self.args.pretrained, (str, Path)):
+            weights = self.args.pretrained
+
         self.model = self.get_model(cfg=cfg, weights=weights, verbose=RANK == -1)  # calls Model(cfg, weights)
         return ckpt
 
