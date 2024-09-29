@@ -171,6 +171,8 @@ class BaseValidator:
             batch_list = []
             last = len(branches) - 1
 
+            batch_branch = batch.copy()
+
             for i in range(len(branches)):
                 batch_list.append({})
 
@@ -190,7 +192,7 @@ class BaseValidator:
                     if i == 0:
                         mask = last_mask = target[:, 1] < end_class
 
-                    elif i == last:
+                    elif i == last and i > 0:
                         mask = start_class <= target[:, 1]
 
                     else:
@@ -202,56 +204,64 @@ class BaseValidator:
                     bat = target[mask]
                     # batch_idx = batch["batch_idx"].to(dtype=torch.long)[mask]
                     idxes_idx = torch.unique(bat[:, 0], sorted=True).to(dtype=torch.long)
-
+                    branch_ID = branches.index(branch)
 
                     if bat.shape[0] > 1:
                         # idxes_idx = torch.unique(batch_idx, sorted=True).to(dtype=torch.long)
                         batch_img = []
                         batch_img.extend(batch['img'][num] for num in idxes_idx)
-                        batch_list[i]['img'] = torch.stack(batch_img)
-                        preds = model(batch_list[i]['img'], augment=augment)
+                        batch_branch['img'] = torch.stack(batch_img)
+                        preds = model(batch_branch['img'], augment=augment)
 
                         # Loss
                         with dt[2]:
-                            branch_ID = branches.index(branch)
                             batch_im_file, batch_ori_shape, batch_resized_shape, batch_ratio_pad = [],[],[],[]
                             batch_im_file.extend(batch['im_file'][num] for num in idxes_idx)
                             batch_ori_shape.extend(batch['ori_shape'][num] for num in idxes_idx)
                             batch_resized_shape.extend(batch['resized_shape'][num] for num in idxes_idx)
                             batch_ratio_pad.extend(batch['ratio_pad'][num] for num in idxes_idx)
 
-                            batch_list[i]['im_file'] = list(batch_im_file)
-                            batch_list[i]['ori_shape'] = list(batch_ori_shape)
-                            batch_list[i]['resized_shape'] = list(batch_resized_shape)
-                            batch_list[i]['ratio_pad'] = list(batch_ratio_pad)
+                            batch_branch['im_file'] = list(batch_im_file)
+                            batch_branch['ori_shape'] = list(batch_ori_shape)
+                            batch_branch['resized_shape'] = list(batch_resized_shape)
+                            batch_branch['ratio_pad'] = list(batch_ratio_pad)
 
-                            batch_list[i]['batch_idx'], batch_list[i]['cls'], batch_list[i]['bboxes'] = bat[:, 0], \
+                            for j, num in enumerate(bat[:, 0]):
+                                bat[:, 0][j] = (idxes_idx == num).nonzero().squeeze(dim=1)
+
+                            if start_class > 0:
+                                bat[:, 1] -= start_class
+
+                            batch_branch['batch_idx'], batch_branch['cls'], batch_branch['bboxes'] = bat[:, 0], \
                                             bat[:, 1].view(-1, 1), bat[:, 2:]
 
                             # idxes_idx = torch.unique(batch_list[i]['batch_idx'], sorted=True).to(dtype=torch.float32)
 
-                            for j, num in enumerate(batch_list[i]['batch_idx']):
-                                batch_list[i]['batch_idx'][j] = (idxes_idx == num).nonzero().squeeze(dim=1)
-
-                            if end_class - branch > 0:
-                                batch_list[i]['cls'] = batch_list[i]['cls'] - (end_class - branch)
-
                             if len(branches) > 1 and self.training:
-                                self.loss += model.loss(batch_list[i], preds[branch_ID][1], branch_ID=branch_ID)[1]
-                            elif self.training:
-                                self.loss += model.loss(batch_list[i], preds[1], branch_ID=branch_ID)[1]
+                                pred = preds[branch_ID][1]
+                                pred = [_pred[idxes_idx] for _pred in pred]
+                                self.loss += model.loss(batch_branch, pred, branch_ID=branch_ID, idxes_idx=idxes_idx)[1]
+                            elif len(branches) == 1 and self.training:
+                                self.loss += model.loss(batch_branch, preds[branch_ID][1])[1]
 
                         # Postprocess
                         with dt[3]:
                             if len(branches) > 1:
                                 _preds = self.postprocess(preds[branch_ID])
                             else:
-                                _preds = self.postprocess(preds)
+                                _preds = self.postprocess(preds[0])
 
-                        self.update_metrics(_preds, batch_list[i], cls_start=start_class)
+                        self.update_metrics(_preds, batch_branch, cls_start=start_class)
                         if self.args.plots and batch_i < 3:
                             self.plot_val_samples(batch, batch_i, cls_start=start_class)
                             self.plot_predictions(batch, _preds, batch_i, cls_start=start_class)
+                    else:
+                        if len(branches) > 1 and self.training:
+                            pred = preds[branch_ID][1]
+                            pred = [_pred[idxes_idx] for _pred in pred]
+                            self.loss[0] += pred[0].sum() * 0
+                            self.loss[1] += pred[1].sum() * 0
+                            self.loss[2] += pred[2].sum() * 0
 
             self.run_callbacks("on_val_batch_end")
 
@@ -269,8 +279,6 @@ class BaseValidator:
         else:
             LOGGER.info('Speed: %.1fms preprocess, %.1fms inference, %.1fms loss, %.1fms postprocess per image' %
                         tuple(speed_1.values()))
-            # LOGGER.info('Speed_object: %.1fms preprocess, %.1fms inference, %.1fms loss, %.1fms postprocess per image' %
-            #             tuple(speed_2.values()))
             if self.args.save_json and self.jdict:
                 with open(str(self.save_dir / 'predictions.json'), 'w') as f:
                     LOGGER.info(f'Saving {f.name}...')

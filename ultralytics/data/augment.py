@@ -147,18 +147,26 @@ class BaseMixTransform:
                 # indexes = []
                 # skip_count = 0
                 # count = len(self.get_indexes())
+                last_index = 0
                 while len(indexes) != count:
                     skip_count += 1
                     if skip_count > 10:
                         break
                     _indexes = self.get_indexes()
+
                     for index in _indexes:
+                        if last_index == index:
+                            continue
                         _label = self.dataset.get_image_and_label(index)
                         _label_cls = _label['cls'][0]
                         if start_class <= _label_cls <= end_class:
                             indexes.append(index)
                             if len(indexes) == count:
                                 break
+
+                        last_index = index
+
+
 
                 # if not indexes:
                 #     return labels
